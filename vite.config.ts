@@ -11,6 +11,21 @@ import { epoxyPath } from '@mercuryworkshop/epoxy-transport'
 import { libcurlPath } from '@mercuryworkshop/libcurl-transport'
 import path from 'node:path'
 
+// Deploy targets (Coolify, Docker builds) copy the source without the .git directory,
+// so fall back to whatever commit SHA the platform exposes before shelling out to git.
+const gitCommit = () => {
+  const fromEnv = process.env.SOURCE_COMMIT ?? process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.CF_PAGES_COMMIT_SHA
+  if (fromEnv) return fromEnv
+
+  try {
+    return execSync('git rev-parse HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString()
+      .trim()
+  } catch {
+    return 'unknown'
+  }
+}
+
 export default defineConfig({
   plugins: [
     solid(),
@@ -57,7 +72,7 @@ export default defineConfig({
   },
   define: {
     __BUILD_DATE__: Date.now(),
-    __GIT_COMMIT__: JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.CF_PAGES_COMMIT_SHA ?? execSync('git rev-parse HEAD').toString().trim()),
+    __GIT_COMMIT__: JSON.stringify(gitCommit()),
     __PRODUCTION__: process.env.NODE_ENV === 'production'
   }
 })
