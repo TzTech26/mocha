@@ -1,6 +1,5 @@
-import { spawn } from 'node:child_process'
+import { type ChildProcess, spawn } from 'node:child_process'
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import readline from 'node:readline'
 import { consola } from 'consola'
@@ -75,32 +74,9 @@ function collectTunnels(): Tunnel[] {
   return tunnels
 }
 
-function buildConfig(tunnels: Tunnel[]): string {
-  const region = process.env.NGROK_REGION?.trim()
-  const lines = ['version: "2"']
-
-  if (region) lines.push(`region: ${region}`)
-  lines.push('tunnels:')
-
-  for (const tunnel of tunnels) {
-    lines.push(`  ${tunnel.name}:`)
-    lines.push('    proto: http')
-    lines.push(`    addr: "${tunnel.addr}"`)
-    if (tunnel.domain) lines.push(`    domain: ${tunnel.domain}`)
-  }
-
-  return `${lines.join('\n')}\n`
-}
-
 loadEnvFile(path.resolve('.env'))
 
 const authtoken = process.env.NGROK_AUTHTOKEN?.trim()
-
-if (!authtoken) {
-  consola.error('NGROK_AUTHTOKEN is not set. Copy .env.example to .env and paste the token from https://dashboard.ngrok.com/get-started/your-authtoken')
-  process.exit(1)
-}
-
 const tunnels = collectTunnels()
 
 if (!tunnels.length) {
@@ -108,82 +84,107 @@ if (!tunnels.length) {
   process.exit(1)
 }
 
-if (tunnels.length > 1) {
-  consola.warn('Running more than one simultaneous tunnel requires a paid ngrok plan')
+if (!authtoken) {
+  consola.info('NGROK_AUTHTOKEN is not set, falling back to the token saved by `ngrok config add-authtoken`')
 }
 
-// The authtoken is handed to the agent through the environment instead of the
-// config file so the secret never touches disk.
-const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mocha-ngrok-'))
-const configPath = path.join(configDir, 'ngrok.yml')
+// Each tunnel gets its own agent, driven entirely by command line flags. The
+// agent config file is left alone so there is no config schema to keep in sync,
+// and a token in the environment still overrides whatever the agent has saved.
+if (tunnels.length > 1) {
+  consola.warn('Running more than one simultaneous tunnel requires a paid ngrok plan, since every tunnel opens its own agent session')
+}
 
-fs.writeFileSync(configPath, buildConfig(tunnels), { mode: 0o600 })
+const label = (tunnel: Tunnel) => (tunnels.length > 1 ? `${tunnel.name}: ` : '')
 
-const cleanup = () => {
-  try {
-    fs.rmSync(configDir, { recursive: true, force: true })
-  } catch {}
+const processes: ChildProcess[] = []
+let shuttingDown = false
+let reportedMissingAgent = false
+
+const shutdown = (signal: NodeJS.Signals = 'SIGTERM') => {
+  if (shuttingDown) return
+  shuttingDown = true
+
+  for (const child of processes) child.kill(signal)
+}
+
+function start(tunnel: Tunnel) {
+  const args = ['http', tunnel.addr, '--log=stdout', '--log-format=json']
+  if (tunnel.domain) args.push(`--domain=${tunnel.domain}`)
+
+  const child = spawn('ngrok', args, {
+    env: authtoken ? { ...process.env, NGROK_AUTHTOKEN: authtoken } : process.env,
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
+
+  child.on('error', (error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') {
+      if (!reportedMissingAgent) {
+        reportedMissingAgent = true
+        consola.error('The ngrok agent was not found on your PATH. Install it from https://ngrok.com/download and try again.')
+      }
+    } else {
+      consola.error(error)
+    }
+
+    shutdown()
+    process.exitCode = 1
+  })
+
+  if (child.stdout) {
+    readline.createInterface({ input: child.stdout }).on('line', (line) => {
+      let entry: Record<string, string>
+
+      try {
+        entry = JSON.parse(line)
+      } catch {
+        consola.log(`${label(tunnel)}${line}`)
+        return
+      }
+
+      if (entry.msg === 'started tunnel') {
+        consola.success(`${label(tunnel)}${entry.url} -> ${tunnel.addr}`)
+        return
+      }
+
+      if (entry.lvl === 'eror' || entry.lvl === 'crit') {
+        consola.error(`${label(tunnel)}${entry.err ?? entry.msg}`)
+        return
+      }
+
+      if (entry.lvl === 'warn') consola.warn(`${label(tunnel)}${entry.msg}`)
+    })
+  }
+
+  if (child.stderr) {
+    readline.createInterface({ input: child.stderr }).on('line', (line) => consola.error(`${label(tunnel)}${line}`))
+  }
+
+  child.on('close', (code) => {
+    // One dead agent leaves the setup half up, so take the rest down with it.
+    if (!shuttingDown) {
+      if (code) consola.error(`${label(tunnel)}ngrok exited with code ${code}`)
+      shutdown()
+    }
+
+    // A failed spawn closes with a negative errno, which would wrap around
+    // into a nonsense exit code.
+    if (code) process.exitCode = code > 0 ? code : 1
+  })
+
+  processes.push(child)
 }
 
 for (const tunnel of tunnels) {
   consola.start(`${tunnel.name}: ${tunnel.domain ?? 'ngrok assigned url'} -> ${tunnel.addr}`)
+  start(tunnel)
 }
 
-const ngrok = spawn('ngrok', ['start', '--all', '--config', configPath, '--log', 'stdout', '--log-format', 'json'], {
-  env: { ...process.env, NGROK_AUTHTOKEN: authtoken },
-  stdio: ['ignore', 'pipe', 'pipe']
-})
-
-ngrok.on('error', (error: NodeJS.ErrnoException) => {
-  cleanup()
-
-  if (error.code === 'ENOENT') {
-    consola.error('The ngrok agent was not found on your PATH. Install it from https://ngrok.com/download and try again.')
-    process.exit(1)
-  }
-
-  consola.error(error)
-  process.exit(1)
-})
-
-if (ngrok.stdout) {
-  readline.createInterface({ input: ngrok.stdout }).on('line', (line) => {
-    let entry: Record<string, string>
-
-    try {
-      entry = JSON.parse(line)
-    } catch {
-      consola.log(line)
-      return
-    }
-
-    if (entry.msg === 'started tunnel') {
-      consola.success(`${entry.name?.replace(/ \(http\)$/, '') ?? 'tunnel'}: ${entry.url}`)
-      return
-    }
-
-    if (entry.lvl === 'eror' || entry.lvl === 'crit') {
-      consola.error(entry.err ?? entry.msg)
-      return
-    }
-
-    if (entry.lvl === 'warn') consola.warn(entry.msg)
-    if (entry.msg === 'client session established') consola.info('Inspect requests on http://127.0.0.1:4040')
-  })
-}
-
-if (ngrok.stderr) {
-  readline.createInterface({ input: ngrok.stderr }).on('line', (line) => consola.error(line))
-}
+consola.info('Inspect requests on http://127.0.0.1:4040')
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     consola.info('Shutting down tunnels')
-    ngrok.kill('SIGTERM')
+    shutdown()
   })
 }
-
-ngrok.on('close', (code) => {
-  cleanup()
-  process.exit(code ?? 0)
-})
