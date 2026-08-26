@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "tsx server.ts"
+    "start": "tsx server.ts",
+    "tunnel": "tsx tunnel.ts"
   },
   "dependencies": {
     "@mercuryworkshop/bare-mux": "^2.1.7",
