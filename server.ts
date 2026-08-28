@@ -14,6 +14,10 @@ const proxy = httpProxy.createProxyServer()
 const app = express()
 const port = process.env.PORT || 3003
 
+// The games CDN has moved hosts before, so let a deployment point /cdn
+// somewhere else without a code change.
+const cdnTarget = process.env.CDN_TARGET || 'https://assets.3kh0.net'
+
 // The image builds the frontend already, so a production container starts
 // serving straight away instead of rebuilding on every restart.
 if (process.env.NODE_ENV === 'production' && fs.existsSync(path.resolve('dist', 'index.html'))) {
@@ -40,7 +44,7 @@ proxy.on('error', (error, _req, res) => {
 
 app.use('/cdn', (req, res) => {
   proxy.web(req, res, {
-    target: 'https://assets.3kh0.net',
+    target: cdnTarget,
     changeOrigin: true,
     // @ts-ignore
     rewritePath: {

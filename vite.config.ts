@@ -1,15 +1,15 @@
 import { execSync } from 'node:child_process'
 import { defineConfig, normalizePath } from 'vite'
 import solid from 'vite-plugin-solid'
-import wisp from 'wisp-server-node'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
+import wisp from 'wisp-server-node'
 
-import { uvPath } from '@titaniumnetwork-dev/ultraviolet'
+import path from 'node:path'
 import { baremuxPath } from '@mercuryworkshop/bare-mux/node'
 // @ts-expect-error
 import { epoxyPath } from '@mercuryworkshop/epoxy-transport'
 import { libcurlPath } from '@mercuryworkshop/libcurl-transport'
-import path from 'node:path'
+import { uvPath } from '@titaniumnetwork-dev/ultraviolet'
 
 // Deploy targets (Coolify, Docker builds) copy the source without the .git directory,
 // so fall back to whatever commit SHA the platform exposes before shelling out to git.
@@ -25,6 +25,8 @@ const gitCommit = () => {
     return 'unknown'
   }
 }
+
+const cdnTarget = process.env.CDN_TARGET || 'https://assets.3kh0.net'
 
 export default defineConfig({
   plugins: [
@@ -64,7 +66,7 @@ export default defineConfig({
     proxy: {
       // For development purposes
       '/cdn': {
-        target: 'https://assets.3kh0.net',
+        target: cdnTarget,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/cdn/, '')
       }
