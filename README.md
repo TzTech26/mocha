@@ -33,5 +33,17 @@ npm install
 npm run start
 ```
 
+## Configuration
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `PORT` | `3003` | Port the server listens on. |
+| `CDN_TARGET` | `https://gitlab.com/3kh0/3kh0-assets/-/raw/main` | Where `/cdn` fetches game assets from. The original host, `assets.3kh0.net`, stopped resolving, and the assets now live on GitLab. Point this at a mirror or a self-hosted copy if you have one. |
+
+Raw git hosts serve every text file as `text/plain` and attach their own
+content security policy, so the `/cdn` proxy restores the content type from the
+file extension and drops those headers on the way through. Without that a game
+arrives as source code the browser refuses to run.
+
 ## Support us
 If you like Mocha and would like to support the development, you can donate to me [here](https://buymeacoffee.com/proudparrot2). It helps with server costs, domains, and otherwise financially supports me.
