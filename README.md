@@ -39,11 +39,19 @@ npm run start
 | --- | --- | --- |
 | `PORT` | `3003` | Port the server listens on. |
 | `CDN_TARGET` | `https://gitlab.com/3kh0/3kh0-assets/-/raw/main` | Where `/cdn` fetches game assets from. The original host, `assets.3kh0.net`, stopped resolving, and the assets now live on GitLab. Point this at a mirror or a self-hosted copy if you have one. |
+| `CDN_CACHE_DIR` | `.cache/cdn` | Where fetched assets are cached on disk. |
+| `CDN_CACHE` | enabled | Set to `0` to fetch from the upstream every time. |
 
 Raw git hosts serve every text file as `text/plain` and attach their own
 content security policy, so the `/cdn` proxy restores the content type from the
 file extension and drops those headers on the way through. Without that a game
 arrives as source code the browser refuses to run.
+
+Those hosts also rate limit per IP, and every visitor's assets are fetched by
+the server rather than the browser, so each asset is cached on disk the first
+time it is requested and served locally afterwards. The games page pulls
+hundreds of thumbnails in one view, so mount a volume on `CDN_CACHE_DIR` to keep
+the cache across deploys instead of refetching all of them on every boot.
 
 ## Support us
 If you like Mocha and would like to support the development, you can donate to me [here](https://buymeacoffee.com/proudparrot2). It helps with server costs, domains, and otherwise financially supports me.
