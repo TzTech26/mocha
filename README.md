@@ -33,21 +33,5 @@ npm install
 npm run start
 ```
 
-## Tunneling with ngrok
-
-`npm run tunnel` exposes locally running services through [ngrok](https://ngrok.com/download), which has to be installed and on your `PATH`. The script only opens tunnels, so start the server (`npm run start`) separately.
-
-Copy `.env.example` to `.env` and fill it in:
-
-```sh
-NGROK_AUTHTOKEN=your_authtoken
-NGROK_DOMAIN_1=mocha.ngrok.app
-NGROK_PORT_1=3003
-```
-
-A tunnel is started for every `NGROK_PORT_N` that is set, up to three at once. `NGROK_DOMAIN_N` is the reserved domain that tunnel forwards from; leave it blank to get a random ngrok url. Ports may also be written as `host:port` or a full url to reach a service that isn't on localhost. Point a tunnel at the machine actually serving the port, not `localhost`, when the agent runs somewhere else.
-
-Each tunnel runs its own `ngrok http` agent, so running more than one at a time requires a paid ngrok plan. `NGROK_AUTHTOKEN` is handed to the agent through the environment; leave it unset to use the token from `ngrok config add-authtoken` instead. The agent config file is never read or written by this script.
-
 ## Support us
 If you like Mocha and would like to support the development, you can donate to me [here](https://buymeacoffee.com/proudparrot2). It helps with server costs, domains, and otherwise financially supports me.
