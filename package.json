@@ -21,7 +21,6 @@
     "daisyui": "^4.12.2",
     "express": "^4.19.2",
     "fuse.js": "^7.0.0",
-    "http-proxy": "^1.18.1",
     "idb": "^8.0.0",
     "lucide-solid": "^0.358.0",
     "picocolors": "^1.0.1",
@@ -40,7 +39,6 @@
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@types/express": "^4.17.21",
-    "@types/http-proxy": "^1.17.14",
     "@types/node": "^20.14.7",
     "cross-env": "^7.0.3",
     "typescript": "^5.5.2"
