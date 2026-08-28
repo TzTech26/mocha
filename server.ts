@@ -16,7 +16,21 @@ const port = process.env.PORT || 3003
 
 // The games CDN has moved hosts before, so let a deployment point /cdn
 // somewhere else without a code change.
-const cdnTarget = process.env.CDN_TARGET || 'https://assets.3kh0.net'
+const cdnTarget = process.env.CDN_TARGET || 'https://gitlab.com/3kh0/3kh0-assets/-/raw/main'
+
+// Raw git hosts answer every text file as text/plain and attach their own CSP,
+// so a game would arrive as source code the browser refuses to run.
+const contentTypes: Record<string, string> = {
+  '.css': 'text/css',
+  '.htm': 'text/html',
+  '.html': 'text/html',
+  '.js': 'text/javascript',
+  '.json': 'application/json',
+  '.mjs': 'text/javascript',
+  '.svg': 'image/svg+xml',
+  '.wasm': 'application/wasm',
+  '.xml': 'application/xml'
+}
 
 // The image builds the frontend already, so a production container starts
 // serving straight away instead of rebuilding on every restart.
@@ -39,6 +53,19 @@ proxy.on('error', (error, _req, res) => {
     res.end('Bad gateway')
   } else {
     res.destroy()
+  }
+})
+
+proxy.on('proxyRes', (proxyRes, req) => {
+  for (const header of ['content-security-policy', 'content-security-policy-report-only', 'x-frame-options', 'content-disposition']) {
+    delete proxyRes.headers[header]
+  }
+
+  const extension = path.extname(new URL(req.url ?? '/', 'http://localhost').pathname).toLowerCase()
+  const contentType = contentTypes[extension]
+
+  if (contentType && proxyRes.headers['content-type']?.startsWith('text/plain')) {
+    proxyRes.headers['content-type'] = `${contentType}; charset=utf-8`
   }
 })
 
