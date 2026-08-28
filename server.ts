@@ -1,11 +1,12 @@
+import fs from 'node:fs'
+import http from 'node:http'
+import type { Socket } from 'node:net'
+import path from 'node:path'
 import { consola } from 'consola'
 import express from 'express'
 import httpProxy from 'http-proxy'
-import wisp from 'wisp-server-node'
-import http from 'node:http'
-import path from 'node:path'
 import { build } from 'vite'
-import type { Socket } from 'node:net'
+import wisp from 'wisp-server-node'
 
 const httpServer = http.createServer()
 const proxy = httpProxy.createProxyServer()
@@ -13,10 +14,29 @@ const proxy = httpProxy.createProxyServer()
 const app = express()
 const port = process.env.PORT || 3003
 
-consola.start('Building frontend')
-await build()
+// The image builds the frontend already, so a production container starts
+// serving straight away instead of rebuilding on every restart.
+if (process.env.NODE_ENV === 'production' && fs.existsSync(path.resolve('dist', 'index.html'))) {
+  consola.info('Serving the prebuilt frontend in dist')
+} else {
+  consola.start('Building frontend')
+  await build()
+}
 
 app.use(express.static('dist'))
+
+// A failed upstream request emits on the proxy itself, and an unhandled error
+// event takes the whole server down with it.
+proxy.on('error', (error, _req, res) => {
+  consola.error(error)
+
+  if ('writeHead' in res) {
+    if (!res.headersSent) res.writeHead(502, { 'Content-Type': 'text/plain' })
+    res.end('Bad gateway')
+  } else {
+    res.destroy()
+  }
+})
 
 app.use('/cdn', (req, res) => {
   proxy.web(req, res, {
