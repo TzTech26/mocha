@@ -84,6 +84,35 @@ export default function Route() {
       })
     }
 
+    // Skip the offer once the suggested address is the one already open, since
+    // the patch matches that hostname too.
+    if (patch.suggestedUrl && new URL(patch.suggestedUrl.url).hostname !== hostname) {
+      const suggestedUrl = patch.suggestedUrl
+
+      toast.custom((x) => {
+        return (
+          <div class="toast toast-center toast-top">
+            <div class="alert alert-warning">
+              <TriangleAlert />
+              <span>
+                {suggestedUrl.reason} <br />{' '}
+                <span
+                  class="cursor-pointer underline underline-offset-4"
+                  onMouseDown={() => {
+                    if (!ref) return
+                    ref.src = `/~/${encodeXor(suggestedUrl.url)}`
+                    toast.dismiss(x.id)
+                  }}
+                >
+                  Switch to the mobile site
+                </span>
+              </span>
+            </div>
+          </div>
+        )
+      })
+    }
+
     if (patch.works === false) {
       toast.custom(() => {
         return (
