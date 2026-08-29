@@ -8,9 +8,11 @@ import Layout from './layout'
 import FAQ from './routes/faq'
 import Games from './routes/games'
 import Home from './routes/home'
+import Privacy from './routes/privacy'
 import ProxyViewer from './routes/route'
 import Settings from './routes/settings'
 import Shortcuts from './routes/shortcuts'
+import Terms from './routes/terms'
 import Bookmarks from './routes/bookmarks'
 import './style.css'
 
@@ -102,6 +104,8 @@ render(
       <Route path="/shortcuts" component={Shortcuts} />
       <Route path="/bookmarks" component={Bookmarks} />
       <Route path="/faq" component={FAQ} />
+      <Route path="/terms" component={Terms} />
+      <Route path="/privacy" component={Privacy} />
       <Route path="/settings" component={Settings} />
     </Router>
   ),

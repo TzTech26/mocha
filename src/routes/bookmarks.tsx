@@ -1,5 +1,6 @@
 import { Trash } from 'lucide-solid'
 import { Show } from 'solid-js'
+import Ad from '../components/ad'
 import { bookmarks, handleBookmark } from '../lib/bookmarks'
 import { useNavigate } from '@solidjs/router'
 
@@ -41,6 +42,8 @@ export default function Bookmarks() {
           You don't have any bookmarks saved! <br /> Click the bookmark icon while browsing to save it here.
         </p>
       </Show>
+
+      <Ad placement="bookmarks" />
     </div>
   )
 }
