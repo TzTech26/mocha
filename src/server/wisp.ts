@@ -5,9 +5,13 @@ import type { IncomingMessage } from 'node:http'
 import type { Socket } from 'node:net'
 import { server as wisp } from '@mercuryworkshop/wisp-js/server'
 import { consola } from 'consola'
-import { ProxiedTCPSocket, egressProxies } from './egress'
+import { ProxiedTCPSocket, staticProxies } from './egress'
+import { startWebshareRefresh, webshareEnabled } from './webshare'
 
-const proxying = egressProxies.length > 0
+// Webshare counts even before its first fetch lands. Deciding this up front
+// means a slow or failed initial fetch cannot silently downgrade the server to
+// direct connections: streams fail until the pool fills instead.
+const proxying = staticProxies.length > 0 || webshareEnabled
 
 if (proxying) {
   // UDP cannot ride through an HTTP CONNECT tunnel, and letting it fall back to
@@ -24,10 +28,14 @@ if (proxying) {
     wisp.options.dns_servers = dnsServers
   }
 
-  consola.info(`Egress through ${egressProxies.length} proxy(s): ${egressProxies.map((proxy) => proxy.label).join(', ')}`)
+  if (staticProxies.length) {
+    consola.info(`Egress through ${staticProxies.length} configured proxy(s): ${staticProxies.map((proxy) => proxy.label).join(', ')}`)
+  }
+
   consola.info('UDP streams are disabled while egress proxies are in use')
+  startWebshareRefresh()
 } else {
-  consola.warn('EGRESS_PROXIES is not set - proxied traffic leaves from this server, so sites can see its public IP')
+  consola.warn('No egress proxies are configured - proxied traffic leaves from this server, so sites can see its public IP')
 }
 
 export function routeWisp(request: IncomingMessage, socket: Socket, head: Buffer) {

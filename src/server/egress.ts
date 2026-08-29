@@ -84,7 +84,21 @@ export function parseProxies(raw: string | undefined): EgressProxy[] {
     })
 }
 
-export const egressProxies = parseProxies(process.env.EGRESS_PROXIES)
+// Proxies written out in the environment. These are always in the pool.
+export const staticProxies = parseProxies(process.env.EGRESS_PROXIES)
+
+// Proxies fetched from a provider's API. Replaced wholesale on every refresh so
+// that proxies the provider has dropped stop being used, and left untouched
+// when a refresh fails so the server keeps working off the last good list.
+let providerProxies: EgressProxy[] = []
+
+export function setProviderProxies(proxies: EgressProxy[]) {
+  providerProxies = proxies
+}
+
+export function activeProxies(): EgressProxy[] {
+  return [...staticProxies, ...providerProxies]
+}
 
 // Rotating per connection spreads load and makes each stream look like a
 // different client. Sticky keeps one proxy for the process, which some sites
@@ -94,15 +108,24 @@ const rotation = (process.env.EGRESS_ROTATION || 'round-robin').toLowerCase()
 let nextProxy = 0
 
 export function pickProxy(): EgressProxy {
-  if (rotation === 'random') {
-    return egressProxies[Math.floor(Math.random() * egressProxies.length)]
-  }
-  if (rotation === 'sticky') {
-    return egressProxies[0]
+  const proxies = activeProxies()
+
+  // Dialling out directly here would defeat the whole point, so refuse the
+  // connection instead. This happens when the provider is the only source of
+  // proxies and its very first fetch failed.
+  if (!proxies.length) {
+    throw new Error('no egress proxies are available')
   }
 
-  const proxy = egressProxies[nextProxy % egressProxies.length]
-  nextProxy = (nextProxy + 1) % egressProxies.length
+  if (rotation === 'random') {
+    return proxies[Math.floor(Math.random() * proxies.length)]
+  }
+  if (rotation === 'sticky') {
+    return proxies[0]
+  }
+
+  const proxy = proxies[nextProxy % proxies.length]
+  nextProxy = (nextProxy + 1) % proxies.length
   return proxy
 }
 
@@ -277,6 +300,8 @@ export class ProxiedTCPSocket {
   ) {}
 
   async connect() {
+    // Throws when the pool is empty, which fails the stream rather than
+    // quietly falling back to a direct connection.
     const proxy = pickProxy()
 
     let socket: net.Socket
