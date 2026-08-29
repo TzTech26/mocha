@@ -3,7 +3,8 @@ import toast from 'solid-toast'
 import store from 'store2'
 import { handleTabCloak } from '../lib/cloak'
 import { handleDebug } from '../lib/debug'
-import { handleTheme, themes } from '../lib/theme'
+import { cloakPresets } from '../lib/presets'
+import { defaultTheme, handleTheme, themes } from '../lib/theme'
 import type { DebugData, PanicData, TabData, ThemeData, TransportData, AboutBlankData, DevtoolsData, SearchEngineData } from '../lib/types'
 
 import { CircleCheck, CircleHelp } from 'lucide-solid'
@@ -22,10 +23,10 @@ export default function Settings() {
 
   const [aboutBlank, setAboutBlank] = createSignal('disabled')
 
-  const [theme, setTheme] = createSignal('forest')
+  const [theme, setTheme] = createSignal(defaultTheme)
 
   const [debug, setDebug] = createSignal('disabled')
-  
+
   const [devtools, setDevtools] = createSignal('disabled')
 
   const [transport, setTransport] = createSignal('epoxy')
@@ -149,6 +150,30 @@ export default function Settings() {
           <input type="text" class="input input-bordered w-full" value={tabName()} onInput={(e) => setTabName(e.target.value)} placeholder="Tab name" />
           <input type="text" class="input input-bordered w-full" value={tabIcon()} onInput={(e) => setTabIcon(e.target.value)} placeholder="Tab icon" />
 
+          <div class="flex w-full flex-col gap-2">
+            <p class="text-center text-xs text-base-content/60">Presets</p>
+            <div class="flex w-full flex-wrap gap-2">
+              {cloakPresets.map((preset) => {
+                return (
+                  // biome-ignore lint: it doesn't accept a key for some reason
+                  <button
+                    class="btn btn-outline btn-sm flex-1"
+                    type="button"
+                    onClick={() => {
+                      // Fill the fields and save in one click, so the tab changes
+                      // straight away instead of needing a trip to the Save button.
+                      setTabName(preset.title)
+                      setTabIcon(preset.icon)
+                      save()
+                    }}
+                  >
+                    {preset.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
           <span
             class="absolute top-2.5 right-2.5 text-base-content/50 opacity-0 group-hover:opacity-100 duration-150 cursor-pointer"
             onMouseDown={() => {
@@ -204,8 +229,9 @@ export default function Settings() {
           <p class="text-center text-xs">Change the styling of Mocha's UI</p>
           <select class="select select-bordered w-full max-w-xs" value={theme()} onChange={(e) => setTheme(e.target.value)}>
             {themes.map((item, index) => {
+              const name = item.charAt(0).toUpperCase() + item.slice(1)
               // biome-ignore lint: it doesn't accept a key for some reason
-              return <option value={item}>{index === 0 ? 'Default' : item.charAt(0).toUpperCase() + item.slice(1)}</option>
+              return <option value={item}>{index === 0 ? `${name} (Default)` : name}</option>
             })}
           </select>
 
@@ -361,7 +387,7 @@ export default function Settings() {
             setPanicKey('')
             setPanicUrl('https://classroom.google.com/h')
             setAboutBlank('disabled')
-            setTheme('forest')
+            setTheme(defaultTheme)
             setDebug('disabled')
             setDevtools('disabled')
             setTransport('epoxy')

@@ -1,5 +1,6 @@
 import Fuse, { type FuseResult } from 'fuse.js'
 import { Show, createSignal, onMount } from 'solid-js'
+import Ad from '../components/ad'
 import Game from '../components/game'
 import type { GameData } from '../lib/types'
 
@@ -43,6 +44,8 @@ export default function Games() {
               return <Game game={game} />
             })}
       </div>
+
+      <Ad placement="games" />
     </div>
   )
 }

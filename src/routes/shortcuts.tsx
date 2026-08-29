@@ -1,6 +1,7 @@
 import { Show, createSignal, onMount } from 'solid-js'
 import type { ShortcutData } from '../lib/types'
 
+import Ad from '../components/ad'
 import Shortcut from '../components/shortcut'
 
 export default function Shortcuts() {
@@ -18,14 +19,18 @@ export default function Shortcuts() {
   })
 
   return (
-    <div class="flex flex-wrap justify-center gap-4 px-4 py-8">
-      <Show when={!data()[0]}>
-        <span class="loading loading-dots loading-lg" />
-      </Show>
-      {data().map((shortcut) => {
-        // biome-ignore lint: it's fine
-        return <Shortcut shortcut={shortcut} />
-      })}
+    <div class="flex flex-col items-center">
+      <div class="flex flex-wrap justify-center gap-4 px-4 py-8">
+        <Show when={!data()[0]}>
+          <span class="loading loading-dots loading-lg" />
+        </Show>
+        {data().map((shortcut) => {
+          // biome-ignore lint: it's fine
+          return <Shortcut shortcut={shortcut} />
+        })}
+      </div>
+
+      <Ad placement="shortcuts" />
     </div>
   )
 }
