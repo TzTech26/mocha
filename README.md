@@ -43,7 +43,11 @@ npm run start
 | `CDN_CACHE` | enabled | Set to `0` to fetch from the upstream every time. |
 | `EGRESS_PROXIES` | unset | Upstream proxies to route proxied traffic through, comma or newline separated. Unset means connections are made straight from this server. |
 | `EGRESS_ROTATION` | `round-robin` | How to pick from the list: `round-robin`, `random`, or `sticky` (always the first). |
-| `EGRESS_TIMEOUT` | `20000` | Milliseconds to wait for a proxy to open a tunnel. |
+| `EGRESS_SCOPE` | `connection` | How long a pick lasts. `connection` keeps one proxy for a whole browsing session, which is what sites that pin a session to an IP need. `stream` picks again for every request. |
+| `EGRESS_TIMEOUT` | `10000` | Milliseconds to wait for a proxy to open a tunnel. |
+| `EGRESS_ATTEMPTS` | `3` | How many proxies to try before giving up on a connection. |
+| `EGRESS_FAILURE_LIMIT` | `3` | Consecutive failures before a proxy is taken out of the rotation. |
+| `EGRESS_BENCH_SECONDS` | `120` | How long a proxy stays out once it has been benched. |
 | `EGRESS_DNS_SERVERS` | unset | Resolvers for the destination lookup the stream filter performs, e.g. `1.1.1.1,1.0.0.1`. Only used when egress proxies are in use. |
 | `WEBSHARE_API_KEY` | unset | Webshare API key. Setting it pulls the proxy pool from their API instead of listing proxies by hand. |
 | `WEBSHARE_REFRESH_HOURS` | `24` | How often to pull a fresh list. |
@@ -66,7 +70,7 @@ Set `EGRESS_PROXIES` to send those connections through proxies you control:
 # One proxy
 EGRESS_PROXIES="socks5://user:pass@proxy.example.com:1080"
 
-# A pool, used round robin, one proxy per connection
+# A pool, used round robin
 EGRESS_PROXIES="socks5://user:pass@a.example.com:1080,socks5://user:pass@b.example.com:1080"
 ```
 
@@ -74,6 +78,24 @@ SOCKS5, SOCKS4, HTTP `CONNECT`, and HTTPS `CONNECT` proxies are supported. An
 entry written as a bare `host:port` is treated as SOCKS5. Destination hostnames
 are handed to the proxy unresolved, so the lookup happens there rather than
 here.
+
+### One address per session
+
+A pool is only useful if a single browsing session stays behind a single
+address. Plenty of sites tie a session to the IP that started it: YouTube signs
+its video URLs with it, and Google and Cloudflare pin their challenge pages the
+same way. If every image, script and video segment left through a different
+proxy, those sites would load part way and then stall.
+
+So a proxy is leased for the life of a wisp connection rather than per request,
+and the next connection gets the next proxy in the rotation. Set
+`EGRESS_SCOPE=stream` to go back to a fresh proxy per request.
+
+Rented proxies also fail often, and refusing `CONNECT` with a 502 is the usual
+way. A connection that fails is retried through a different proxy up to
+`EGRESS_ATTEMPTS` times, and a proxy that fails `EGRESS_FAILURE_LIMIT` times in
+a row is taken out of the rotation for `EGRESS_BENCH_SECONDS` so it stops being
+handed out at all.
 
 While a proxy list is set, UDP streams are turned off. UDP cannot travel through
 an HTTP `CONNECT` tunnel, and allowing it to fall back to a direct socket would
