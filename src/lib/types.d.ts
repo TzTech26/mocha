@@ -74,6 +74,12 @@ export interface Patch {
   works?: boolean
   execute?: (contentWindow: ContentWindow) => void // for injecting scripts into websites (not sure what it could be used for yet)
   suggestedTransport?: keyof typeof transports
+  // Offers a different address for the same site when one of them survives the
+  // proxy better. Not shown once the suggested host is the one already loaded.
+  suggestedUrl?: {
+    url: string
+    reason: string
+  }
 }
 
 declare global {

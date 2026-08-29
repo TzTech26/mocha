@@ -10,6 +10,18 @@ export const patches: Patch[] = [
     works: false
   },
   {
+    // The desktop site ships its interface as web components that the page then
+    // hydrates. That script does not survive Ultraviolet's rewriting, so the
+    // browser is left holding the bare skeleton markup: unstyled links, a
+    // visible file picker, and none of the real layout. The mobile site is
+    // built much more plainly and comes through intact.
+    hostname: 'youtube.com',
+    suggestedUrl: {
+      url: 'https://m.youtube.com/',
+      reason: "YouTube's desktop site doesn't render correctly through the proxy."
+    }
+  },
+  {
     hostname: 'google.com',
     execute(contentWindow) {
       const currentUrl = new URL(contentWindow.__uv$location.href)

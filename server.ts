@@ -12,7 +12,7 @@ import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
 import { consola } from 'consola'
 import express from 'express'
 import { build } from 'vite'
-import wisp from 'wisp-server-node'
+import { routeWisp } from './src/server/wisp'
 
 const httpServer = http.createServer()
 
@@ -128,7 +128,7 @@ httpServer.on('request', (req, res) => {
 
 httpServer.on('upgrade', (req, socket, head) => {
   if (req.url?.startsWith('/wisp/')) {
-    wisp.routeRequest(req, socket as Socket, head)
+    routeWisp(req, socket as Socket, head)
   } else {
     socket.end()
   }
