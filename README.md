@@ -43,11 +43,7 @@ npm run start
 | `CDN_CACHE` | enabled | Set to `0` to fetch from the upstream every time. |
 | `EGRESS_PROXIES` | unset | Upstream proxies to route proxied traffic through, comma or newline separated. Unset means connections are made straight from this server. |
 | `EGRESS_ROTATION` | `round-robin` | How to pick from the list: `round-robin`, `random`, or `sticky` (always the first). |
-| `EGRESS_SCOPE` | `stream` | How long a pick lasts. `stream` picks again for every request. `connection` keeps one proxy for a whole browsing session, which some sites need - read the warning below before turning it on. |
-| `EGRESS_TIMEOUT` | `10000` | Milliseconds to wait for a proxy to open a tunnel. |
-| `EGRESS_ATTEMPTS` | `2` | How many proxies to try before giving up on a connection. |
-| `EGRESS_FAILURE_LIMIT` | `3` | Failures before a proxy is taken out of the rotation. Only failures the proxy is answerable for count. |
-| `EGRESS_BENCH_SECONDS` | `120` | How long a proxy stays out once it has been benched. |
+| `EGRESS_TIMEOUT` | `20000` | Milliseconds to wait for a proxy to open a tunnel. |
 | `EGRESS_DNS_SERVERS` | unset | Resolvers for the destination lookup the stream filter performs, e.g. `1.1.1.1,1.0.0.1`. Only used when egress proxies are in use. |
 | `WEBSHARE_API_KEY` | unset | Webshare API key. Setting it pulls the proxy pool from their API instead of listing proxies by hand. |
 | `WEBSHARE_REFRESH_HOURS` | `24` | How often to pull a fresh list. |
@@ -70,7 +66,7 @@ Set `EGRESS_PROXIES` to send those connections through proxies you control:
 # One proxy
 EGRESS_PROXIES="socks5://user:pass@proxy.example.com:1080"
 
-# A pool, used round robin
+# A pool, used round robin, one proxy per connection
 EGRESS_PROXIES="socks5://user:pass@a.example.com:1080,socks5://user:pass@b.example.com:1080"
 ```
 
@@ -78,42 +74,6 @@ SOCKS5, SOCKS4, HTTP `CONNECT`, and HTTPS `CONNECT` proxies are supported. An
 entry written as a bare `host:port` is treated as SOCKS5. Destination hostnames
 are handed to the proxy unresolved, so the lookup happens there rather than
 here.
-
-### Surviving a bad proxy
-
-Rented proxies fail, and a pool is mostly a way of not caring when one does. A
-connection that cannot be opened is retried through a different proxy up to
-`EGRESS_ATTEMPTS` times. A proxy that keeps failing is benched for
-`EGRESS_BENCH_SECONDS` and stops being handed out.
-
-Only failures the proxy is answerable for count towards that: not being
-reachable, never answering, or dropping a tunnel it had already opened. A proxy
-refusing `CONNECT` to one host is usually the host's doing rather than the
-proxy's, and benching on those would empty the pool the first time a popular
-site turned unfriendly.
-
-### One address per session (`EGRESS_SCOPE=connection`)
-
-By default a proxy is picked per request. Some sites do not like that, because
-they tie a session to the address that started it: YouTube signs its video URLs
-with it, and Google and Cloudflare pin their challenge pages the same way. A
-page whose subresources each arrive from a different address can load part way
-and then stall.
-
-`EGRESS_SCOPE=connection` leases one proxy for the life of a wisp connection
-instead, so a whole browsing session shares one address.
-
-**It is off by default because it fails hard.** Per request, a bad proxy takes a
-share of the requests with it and the page mostly still works. Pinned, a session
-that lands on a bad proxy loses *everything* until the proxy is benched, and the
-requests already in flight cannot be rescued - a page load that fires thirty
-subresources at once has picked its proxy before the first failure is known.
-Benching moves later requests onto a healthy proxy, but only for failures that
-can be detected: a proxy that closes tunnels cleanly and early looks exactly
-like a destination that did, and will not be caught.
-
-Turn it on if you need it for a specific site, and watch the logs for benching
-warnings afterwards.
 
 While a proxy list is set, UDP streams are turned off. UDP cannot travel through
 an HTTP `CONNECT` tunnel, and allowing it to fall back to a direct socket would

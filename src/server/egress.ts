@@ -10,6 +10,7 @@ import net from 'node:net'
 import tls from 'node:tls'
 import { consola } from 'consola'
 import { SocksClient } from 'socks'
+import { streamClosed, streamOpened } from './diagnostics'
 
 export type EgressProtocol = 'socks4' | 'socks5' | 'http' | 'https'
 
@@ -100,81 +101,23 @@ export function activeProxies(): EgressProxy[] {
   return [...staticProxies, ...providerProxies]
 }
 
-function positiveNumber(raw: string | undefined, fallback: number) {
-  const value = Number(raw)
-  return Number.isFinite(value) && value > 0 ? value : fallback
-}
-
-// Rotation decides which proxy is picked next. Scope decides how long that pick
-// lasts.
-//
-// Per stream is the default because it fails softly. A rented proxy that goes
-// bad usually takes a share of the requests with it and the page still mostly
-// works. Holding one proxy for a whole wisp connection is what sites that tie a
-// session to an address need - YouTube signs its video URLs with the address
-// that asked for them, and Google and Cloudflare pin their challenges the same
-// way - but it also means landing on a bad proxy takes the entire session down
-// rather than a slice of it. That trade is the operator's to make, so
-// EGRESS_SCOPE=connection is opt in.
+// Rotating per connection spreads load and makes each stream look like a
+// different client. Sticky keeps one proxy for the process, which some sites
+// prefer because the IP stops changing mid-session.
 const rotation = (process.env.EGRESS_ROTATION || 'round-robin').toLowerCase()
-const perConnection = (process.env.EGRESS_SCOPE || 'stream').toLowerCase() === 'connection'
 
 let nextProxy = 0
 
-// A proxy that keeps failing is worse for the pool than not having it at all: it
-// keeps coming up in the rotation and every stream that lands on it stalls
-// first. Count failures and take it out for a while once it has failed enough
-// times in a row.
-//
-// Only failures that are the proxy's own fault count. A proxy refusing CONNECT
-// to one host says something about that host, not about the proxy, and benching
-// on those would empty the pool the first time a busy site turned unfriendly.
-const failureLimit = positiveNumber(process.env.EGRESS_FAILURE_LIMIT, 3)
-const benchDuration = positiveNumber(process.env.EGRESS_BENCH_SECONDS, 120) * 1000
+export function pickProxy(): EgressProxy {
+  const proxies = activeProxies()
 
-// Thrown when the proxy itself is the problem: it could not be reached, it never
-// answered, or it dropped a tunnel that was already running.
-export class ProxyFault extends Error {}
-
-const failureCounts = new Map<string, number>()
-const benchedUntil = new Map<string, number>()
-
-function isBenched(proxy: EgressProxy, now: number) {
-  const until = benchedUntil.get(proxy.label)
-  if (until === undefined) return false
-  if (until > now) return true
-
-  benchedUntil.delete(proxy.label)
-  return false
-}
-
-// A tunnel that opened and then closed cleanly. Decay rather than reset: a proxy
-// that drops two streams for every one it completes is still a bad proxy, and
-// wiping the count on each success would keep it in the rotation forever.
-export function reportSuccess(proxy: EgressProxy) {
-  const count = failureCounts.get(proxy.label)
-  if (count === undefined) return
-
-  if (count <= 1) failureCounts.delete(proxy.label)
-  else failureCounts.set(proxy.label, count - 1)
-}
-
-// Only ever called for something the proxy is answerable for: it could not be
-// reached, or a tunnel it had already opened broke.
-export function reportFailure(proxy: EgressProxy) {
-  const count = (failureCounts.get(proxy.label) ?? 0) + 1
-
-  if (count < failureLimit) {
-    failureCounts.set(proxy.label, count)
-    return
+  // Dialling out directly here would defeat the whole point, so refuse the
+  // connection instead. This happens when the provider is the only source of
+  // proxies and its very first fetch failed.
+  if (!proxies.length) {
+    throw new Error('no egress proxies are available')
   }
 
-  failureCounts.delete(proxy.label)
-  benchedUntil.set(proxy.label, Date.now() + benchDuration)
-  consola.warn(`Benching ${proxy.label} for ${Math.round(benchDuration / 1000)}s after ${count} failed connections`)
-}
-
-function selectFrom(proxies: EgressProxy[]): EgressProxy {
   if (rotation === 'random') {
     return proxies[Math.floor(Math.random() * proxies.length)]
   }
@@ -187,72 +130,9 @@ function selectFrom(proxies: EgressProxy[]): EgressProxy {
   return proxy
 }
 
-// exclude carries the proxies one connection attempt has already tried, so a
-// retry does not land straight back on the proxy that just failed.
-export function pickProxy(exclude?: ReadonlySet<string>): EgressProxy {
-  const proxies = activeProxies()
-
-  // Dialling out directly here would defeat the whole point, so refuse the
-  // connection instead. This happens when the provider is the only source of
-  // proxies and its very first fetch failed.
-  if (!proxies.length) {
-    throw new Error('no egress proxies are available')
-  }
-
-  const now = Date.now()
-  const usable = proxies.filter((proxy) => !isBenched(proxy, now))
-  const untried = exclude?.size ? usable.filter((proxy) => !exclude.has(proxy.label)) : usable
-
-  // Each fallback gives up a preference rather than the connection. Every proxy
-  // being benched, or having already been tried, is still better answered with a
-  // long shot than with no attempt at all.
-  return selectFrom(untried.length ? untried : usable.length ? usable : proxies)
-}
-
-// One wisp connection is one browser session's worth of traffic, and every
-// stream it opens leases its proxy from the same session object. That is what
-// keeps the whole session behind a single address.
-export class EgressSession {
-  private pinned: EgressProxy | null = null
-
-  lease(exclude?: ReadonlySet<string>): EgressProxy {
-    if (!perConnection) return pickProxy(exclude)
-
-    const current = this.pinned
-    // Keep the pin unless there is nothing pinned yet, the pinned proxy has been
-    // benched, or a provider refresh has dropped it from the pool. Re-pinning on
-    // a bench is what stops one bad proxy from holding a session hostage
-    // indefinitely, though it cannot rescue requests already in flight.
-    const pinned = current && !isBenched(current, Date.now()) && activeProxies().some((proxy) => proxy.label === current.label) ? current : pickProxy(exclude)
-
-    this.pinned = pinned
-
-    // A retry inside a single stream borrows a different proxy without moving
-    // the pin: one destination this proxy cannot reach is not a reason to change
-    // the address the rest of the session is browsing from.
-    return exclude?.has(pinned.label) ? pickProxy(exclude) : pinned
-  }
-}
-
-// wisp-js constructs the socket class it is handed with only a hostname and a
-// port, so the session has to be bound in here rather than passed through.
-export function egressSocketClass(session: EgressSession) {
-  return class SessionTCPSocket extends ProxiedTCPSocket {
-    constructor(hostname: string, port: number) {
-      super(hostname, port, session)
-    }
-  }
-}
-
-// Halved from the old 20s because a failed attempt is now retried through
-// another proxy. Two attempts at 10s is the same worst case the single 20s
-// attempt used to have, so a dead proxy costs no more wall clock than before.
 function connectTimeout() {
-  return positiveNumber(process.env.EGRESS_TIMEOUT, 10000)
-}
-
-function connectAttempts() {
-  return Math.floor(positiveNumber(process.env.EGRESS_ATTEMPTS, 2))
+  const value = Number(process.env.EGRESS_TIMEOUT || 20000)
+  return Number.isFinite(value) && value > 0 ? value : 20000
 }
 
 // Opens the tunnel and hands back a socket that is already talking to the
@@ -260,12 +140,11 @@ function connectAttempts() {
 // DNS lookup, which keeps the destination out of this machine's DNS traffic.
 async function openHttpTunnel(proxy: EgressProxy, hostname: string, port: number): Promise<net.Socket> {
   const socket = await new Promise<net.Socket>((resolve, reject) => {
-    // Never reaching the proxy is squarely the proxy's problem.
-    const onError = (error: Error) => reject(error instanceof ProxyFault ? error : new ProxyFault(error.message))
+    const onError = (error: Error) => reject(error)
 
     const pending = proxy.protocol === 'https' ? tls.connect({ host: proxy.host, port: proxy.port, servername: proxy.host }, () => resolve(pending)) : net.connect({ host: proxy.host, port: proxy.port }, () => resolve(pending))
 
-    pending.setTimeout(connectTimeout(), () => pending.destroy(new ProxyFault('timed out connecting to the proxy')))
+    pending.setTimeout(connectTimeout(), () => pending.destroy(new Error('timed out connecting to the proxy')))
     pending.once('error', onError)
   })
 
@@ -299,7 +178,7 @@ async function openHttpTunnel(proxy: EgressProxy, hostname: string, port: number
         if (response.length > 64 * 1024) {
           cleanup()
           socket.destroy()
-          reject(new ProxyFault('the proxy sent an oversized CONNECT response'))
+          reject(new Error('the proxy sent an oversized CONNECT response'))
         }
         return
       }
@@ -309,9 +188,6 @@ async function openHttpTunnel(proxy: EgressProxy, hostname: string, port: number
 
       if (status !== 200) {
         socket.destroy()
-        // Deliberately not a ProxyFault: a proxy refusing one destination is
-        // usually the destination's doing, and benching on it would empty the
-        // pool the first time a popular host started saying no.
         reject(new Error(`the proxy refused CONNECT with status ${status || 'unknown'}`))
         return
       }
@@ -333,13 +209,13 @@ async function openHttpTunnel(proxy: EgressProxy, hostname: string, port: number
 
     const onClose = () => {
       cleanup()
-      reject(new ProxyFault('the proxy closed the connection during CONNECT'))
+      reject(new Error('the proxy closed the connection during CONNECT'))
     }
 
     socket.on('data', onData)
     socket.once('error', onError)
     socket.once('close', onClose)
-    socket.setTimeout(connectTimeout(), () => socket.destroy(new ProxyFault('timed out waiting for the proxy to answer CONNECT')))
+    socket.setTimeout(connectTimeout(), () => socket.destroy(new Error('timed out waiting for the proxy to answer CONNECT')))
   })
 
   return socket
@@ -375,50 +251,30 @@ export async function openTunnel(proxy: EgressProxy, hostname: string, port: num
 }
 
 // Matches the queue wisp-js uses internally: get() resolves to undefined once
-// the stream has ended and everything already buffered has been read.
+// close() has been called, which is how a stream signals that it ended.
 class AsyncQueue<T> {
   private queue: T[] = []
   private waiting: (() => void)[] = []
-  private ended = false
 
   constructor(readonly maxSize: number) {}
 
   put(item: T) {
-    if (this.ended) return
     this.queue.push(item)
     this.waiting.shift()?.()
   }
 
   async get(): Promise<T | undefined> {
-    // Looping rather than reading once means a wakeup that another caller got
-    // to first parks again instead of reporting a false end of stream.
-    while (true) {
-      if (this.queue.length > 0) return this.queue.shift()
-      if (this.ended) return undefined
+    if (this.queue.length > 0) return this.queue.shift()
 
-      await new Promise<void>((resolve) => {
-        this.waiting.push(resolve)
-      })
-    }
+    await new Promise<void>((resolve) => {
+      this.waiting.push(resolve)
+    })
+
+    return this.queue.shift()
   }
 
-  // The connection is gone, but what it managed to send before hanging up still
-  // has to be delivered. Throwing it away truncates the reply mid TLS record and
-  // the browser sits there waiting for the rest of a response that never comes,
-  // which is what a page that loads halfway and then freezes looks like.
-  end() {
-    this.ended = true
-    this.wake()
-  }
-
-  // The stream itself is being torn down, so nothing is left to read the rest.
   close() {
-    this.ended = true
     this.queue = []
-    this.wake()
-  }
-
-  private wake() {
     let resolve = this.waiting.shift()
     while (resolve) {
       resolve()
@@ -438,71 +294,36 @@ export class ProxiedTCPSocket {
   private socket: net.Socket | null = null
   private paused = false
   private readonly queue = new AsyncQueue<Buffer>(128)
-  private readonly session: EgressSession
 
   constructor(
     readonly hostname: string,
-    readonly port: number,
-    session?: EgressSession
-  ) {
-    // A caller with no session of its own gets a private one, which is the old
-    // behaviour of choosing a fresh proxy for every stream.
-    this.session = session ?? new EgressSession()
-  }
+    readonly port: number
+  ) {}
 
   async connect() {
-    const attempts = connectAttempts()
-    // Rented proxies fail often enough that one bad pick should not take the
-    // request down with it, and the retry has to avoid the proxy that just
-    // failed to reach this destination.
-    const tried = new Set<string>()
-    let failure: Error | null = null
+    // Throws when the pool is empty, which fails the stream rather than
+    // quietly falling back to a direct connection.
+    const proxy = pickProxy()
 
-    for (let attempt = 1; attempt <= attempts; attempt++) {
-      // Throws when the pool is empty, which fails the stream rather than
-      // quietly falling back to a direct connection.
-      const proxy = this.session.lease(tried)
-      tried.add(proxy.label)
-
-      try {
-        this.attach(await openTunnel(proxy, this.hostname, this.port), proxy)
-        return
-      } catch (error) {
-        // Every failure is retried elsewhere, but only the proxy's own faults
-        // count towards taking it out of the rotation.
-        if (error instanceof ProxyFault) reportFailure(proxy)
-        // Name the proxy, not the destination, so a broken proxy is obvious.
-        failure = new Error(`${proxy.label} could not reach ${this.hostname}:${this.port} - ${(error as Error).message}`)
-        // Only the attempt that gives up is worth a warning; wisp-js logs that
-        // one itself when the stream fails.
-        consola.debug(`egress attempt ${attempt}/${attempts} failed - ${failure.message}`)
-      }
+    let socket: net.Socket
+    try {
+      socket = await openTunnel(proxy, this.hostname, this.port)
+    } catch (error) {
+      // Name the proxy, not the destination, so a broken proxy is obvious.
+      throw new Error(`${proxy.label} could not reach ${this.hostname}:${this.port} - ${(error as Error).message}`)
     }
 
-    throw failure ?? new Error(`could not reach ${this.hostname}:${this.port}`)
-  }
-
-  private attach(socket: net.Socket, proxy: EgressProxy) {
     this.socket = socket
-    let broke = false
+    streamOpened()
 
     socket.on('data', (data) => this.queue.put(data))
     socket.on('close', () => {
-      // End rather than discard, so the tail of the response still reaches the
-      // browser instead of being dropped along with the socket.
-      this.queue.end()
+      streamClosed()
+      this.queue.close()
       this.socket = null
-      // A tunnel that ran to completion is the clearest evidence there is that
-      // this proxy still works.
-      if (!broke) reportSuccess(proxy)
     })
     socket.on('error', (error) => {
-      // A tunnel that opened and then broke never showed up as a connect
-      // failure, so without this a proxy that accepts CONNECT and then drops
-      // everything would stay in the rotation forever.
-      broke = true
-      reportFailure(proxy)
-      consola.warn(`egress stream to ${this.hostname}:${this.port} via ${proxy.label} ended with an error - ${error.message}`)
+      consola.warn(`egress stream to ${this.hostname}:${this.port} ended with an error - ${error.message}`)
     })
     socket.on('end', () => {
       if (!this.socket) return
@@ -522,16 +343,7 @@ export class ProxiedTCPSocket {
 
   async send(data: Uint8Array) {
     const socket = this.socket
-
-    // The tunnel is already gone. Dropping the bytes quietly leaves the browser
-    // waiting on the answer to a request that was never sent, so end the read
-    // side too and let wisp tear the stream down and tell the client. End rather
-    // than close: a client that writes while the response is still draining must
-    // not cost it the rest of that response.
-    if (!socket) {
-      this.queue.end()
-      return
-    }
+    if (!socket) return
 
     await new Promise<void>((resolve) => {
       socket.write(data, () => resolve())
@@ -539,9 +351,6 @@ export class ProxiedTCPSocket {
   }
 
   async close() {
-    // wisp only calls this while tearing the stream down, so anything still
-    // buffered has nowhere left to go.
-    this.queue.close()
     if (!this.socket) return
     this.socket.end()
     this.socket = null
