@@ -38,6 +38,7 @@ npm run start
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `PORT` | `3003` | Port the server listens on. |
+| `DIAGNOSTICS_SECONDS` | `60` | Seconds between health lines, which report live connections, streams, memory and open file descriptors against the limits this process has. `0` turns them off. |
 | `CDN_TARGET` | `https://gitlab.com/3kh0/3kh0-assets/-/raw/main` | Where `/cdn` fetches game assets from. The original host, `assets.3kh0.net`, stopped resolving, and the assets now live on GitLab. Point this at a mirror or a self-hosted copy if you have one. |
 | `CDN_CACHE_DIR` | `.cache/cdn` | Where fetched assets are cached on disk. |
 | `CDN_CACHE` | enabled | Set to `0` to fetch from the upstream every time. |
