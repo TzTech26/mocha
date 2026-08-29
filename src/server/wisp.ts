@@ -5,6 +5,7 @@ import type { IncomingMessage } from 'node:http'
 import type { Socket } from 'node:net'
 import { server as wisp } from '@mercuryworkshop/wisp-js/server'
 import { consola } from 'consola'
+import { connectionClosed, connectionOpened } from './diagnostics'
 import { ProxiedTCPSocket, staticProxies } from './egress'
 import { startWebshareRefresh, webshareEnabled } from './webshare'
 
@@ -39,5 +40,10 @@ if (proxying) {
 }
 
 export function routeWisp(request: IncomingMessage, socket: Socket, head: Buffer) {
+  connectionOpened()
+  // The upgraded socket outlives the wisp connection object, so count it down
+  // from the socket rather than from anything wisp-js exposes.
+  socket.once('close', connectionClosed)
+
   wisp.routeRequest(request, socket, head, proxying ? { TCPSocket: ProxiedTCPSocket } : {})
 }

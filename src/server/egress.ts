@@ -10,6 +10,7 @@ import net from 'node:net'
 import tls from 'node:tls'
 import { consola } from 'consola'
 import { SocksClient } from 'socks'
+import { streamClosed, streamOpened } from './diagnostics'
 
 export type EgressProtocol = 'socks4' | 'socks5' | 'http' | 'https'
 
@@ -313,9 +314,11 @@ export class ProxiedTCPSocket {
     }
 
     this.socket = socket
+    streamOpened()
 
     socket.on('data', (data) => this.queue.put(data))
     socket.on('close', () => {
+      streamClosed()
       this.queue.close()
       this.socket = null
     })

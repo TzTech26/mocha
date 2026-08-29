@@ -12,7 +12,10 @@ import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
 import { consola } from 'consola'
 import express from 'express'
 import { build } from 'vite'
+import { startDiagnostics } from './src/server/diagnostics'
 import { routeWisp } from './src/server/wisp'
+
+startDiagnostics()
 
 const httpServer = http.createServer()
 
