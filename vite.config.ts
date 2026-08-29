@@ -2,7 +2,7 @@ import { execSync } from 'node:child_process'
 import { defineConfig, normalizePath } from 'vite'
 import solid from 'vite-plugin-solid'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
-import wisp from 'wisp-server-node'
+import { routeWisp } from './src/server/wisp'
 
 import path from 'node:path'
 import { baremuxPath } from '@mercuryworkshop/bare-mux/node'
@@ -36,7 +36,7 @@ export default defineConfig({
       configureServer(server) {
         server.httpServer?.on('upgrade', (req, socket, head) => {
           if (req.url?.startsWith('/wisp/')) {
-            wisp.routeRequest(req, socket, head)
+            routeWisp(req, socket, head)
           }
         })
       }

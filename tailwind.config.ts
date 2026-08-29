@@ -6,7 +6,8 @@ import { customThemes, themes } from './src/lib/theme'
 const builtInThemes = themes.filter((theme) => !customThemes.includes(theme))
 
 export default {
-  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  // src/server is Node code with no markup, so keep it out of the class scan.
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}', '!./src/server/**'],
   theme: {
     extend: {}
   },
