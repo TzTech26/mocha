@@ -5,7 +5,7 @@ import type { IncomingMessage } from 'node:http'
 import type { Socket } from 'node:net'
 import { server as wisp } from '@mercuryworkshop/wisp-js/server'
 import { consola } from 'consola'
-import { EgressSession, egressSocketClass, staticProxies } from './egress'
+import { ProxiedTCPSocket, staticProxies } from './egress'
 import { startWebshareRefresh, webshareEnabled } from './webshare'
 
 // Webshare counts even before its first fetch lands. Deciding this up front
@@ -39,14 +39,5 @@ if (proxying) {
 }
 
 export function routeWisp(request: IncomingMessage, socket: Socket, head: Buffer) {
-  if (!proxying) {
-    wisp.routeRequest(request, socket, head, {})
-    return
-  }
-
-  // One session per wisp connection, which is one browser tab's worth of
-  // browsing. Every stream that connection opens leases its proxy from here, so
-  // the whole session leaves from one address instead of a different one per
-  // subresource.
-  wisp.routeRequest(request, socket, head, { TCPSocket: egressSocketClass(new EgressSession()) })
+  wisp.routeRequest(request, socket, head, proxying ? { TCPSocket: ProxiedTCPSocket } : {})
 }
