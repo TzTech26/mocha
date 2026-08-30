@@ -20,13 +20,33 @@ if (proxying) {
   // off is what keeps "no direct connections" actually true.
   wisp.options.allow_udp_streams = false
 
-  // wisp-js resolves the destination locally to check it against the private IP
-  // filter, even though the proxy does the real lookup. Pointing that at a
-  // resolver of your choosing keeps the browsing out of the ISP's DNS logs.
+  // wisp-js resolves every destination locally, only to check the answer
+  // against its private IP filter - the proxy is the one that does the lookup
+  // that matters, from a network this server never touches. So the local
+  // answer decides nothing about where the connection goes, and when the two
+  // disagree it is the local one that wins the argument and refuses the
+  // stream.
+  //
+  // They disagree on any host whose resolver filters: a Pi-hole, a filtering
+  // upstream resolver, a hosts file. Those answer 0.0.0.0 for ad and tracker
+  // domains, which reads as an unspecified address, which reads as a private
+  // one - so wisp-js logs "refusing to create a stream" and drops it, while
+  // the client keeps sending on a stream that no longer exists. A page loses
+  // exactly the requests that host has a blocklist entry for, and says
+  // nothing about it.
+  //
+  // Answering with the hostname skips the lookup entirely. It costs nothing:
+  // a literal IP destination is still checked, since wisp-js never resolves
+  // one, and no address this server could have resolved was going to be
+  // dialled from here anyway. It also keeps the destination out of this
+  // machine's DNS traffic for real, which the resolver setting below only
+  // ever did for the operators who configured it.
   const dnsServers = process.env.EGRESS_DNS_SERVERS?.split(/[\s,]+/).filter(Boolean)
   if (dnsServers?.length) {
     wisp.options.dns_method = 'resolve'
     wisp.options.dns_servers = dnsServers
+  } else {
+    wisp.options.dns_method = async (hostname: string) => hostname
   }
 
   if (staticProxies.length) {

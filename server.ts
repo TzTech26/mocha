@@ -55,6 +55,45 @@ if (process.env.NODE_ENV === 'production' && fs.existsSync(path.resolve('dist', 
   await build()
 }
 
+// Requests under this prefix are the proxied ones. They only ever resolve
+// because the service worker answers them; the server has no route for them at
+// all.
+const proxyPrefix = '/~/'
+
+// So a request that reaches here is one that missed the worker, and the catch
+// all below would answer it with index.html and a 200. The viewer iframe then
+// loads a second copy of Mocha instead of the site, which looks like nothing
+// happening: the address bar stays empty, no error appears, and the nested copy
+// quietly re-registers the service worker and resets the shared transport
+// underneath the page that framed it. Answering plainly is worth more than
+// answering with something that parses.
+app.use(proxyPrefix, (_req, res) => {
+  res
+    .status(503)
+    .type('html')
+    .send(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>The proxy did not answer</title>
+    <style>
+      body { margin: 0; display: grid; place-items: center; min-height: 100vh; background: #1c1917; color: #e7e5e4; font: 16px/1.6 system-ui, sans-serif; }
+      div { max-width: 34rem; padding: 2rem; text-align: center; }
+      a { color: inherit; }
+    </style>
+  </head>
+  <body>
+    <div>
+      <h1>The proxy did not answer</h1>
+      <p>This page is served by a service worker in your browser, and it was not the one that handled this request. Reloading Mocha usually fixes it.</p>
+      <p><a href="/">Back to Mocha</a></p>
+    </div>
+  </body>
+</html>
+`)
+})
+
 app.use(express.static('dist'))
 
 // Refuse anything that would escape the cache directory, since the path comes

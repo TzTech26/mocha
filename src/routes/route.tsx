@@ -30,12 +30,17 @@ export default function Route() {
   })
 
   createEffect(() => {
-    if (!ref || !ref.contentWindow) return
+    // Read what this depends on before the guard. An effect that returns
+    // without reading anything has nothing to re-run on, so an iframe that was
+    // not ready on the first pass - or a proxy that was not ready yet, which is
+    // the normal case now that setup waits for the service worker to take
+    // control - would leave the viewer blank for good.
+    const ready = proxyReady()
     const query = atob(params.route)
 
-    if (proxyReady()) {
-      ref.src = `/~/${encodeXor(formatSearch(query))}`
-    }
+    if (!ready || !ref || !ref.contentWindow) return
+
+    ref.src = `/~/${encodeXor(formatSearch(query))}`
   })
 
   function handleLoad() {

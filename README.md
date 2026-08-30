@@ -44,8 +44,9 @@ npm run start
 | `CDN_CACHE` | enabled | Set to `0` to fetch from the upstream every time. |
 | `EGRESS_PROXIES` | unset | Upstream proxies to route proxied traffic through, comma or newline separated. Unset means connections are made straight from this server. |
 | `EGRESS_ROTATION` | `round-robin` | How to pick from the list: `round-robin`, `random`, or `sticky` (always the first). |
-| `EGRESS_TIMEOUT` | `20000` | Milliseconds to wait for a proxy to open a tunnel. |
-| `EGRESS_DNS_SERVERS` | unset | Resolvers for the destination lookup the stream filter performs, e.g. `1.1.1.1,1.0.0.1`. Only used when egress proxies are in use. |
+| `EGRESS_TIMEOUT` | `20000` | Milliseconds to wait for a proxy to open a tunnel. Also the budget for the whole stream: a proxy that hangs this long is not followed by a retry. |
+| `EGRESS_ATTEMPTS` | `3` | How many proxies one stream may try before giving up. A pool always has some members that cannot reach a given destination, and without this a stream landing on one fails the request outright. |
+| `EGRESS_DNS_SERVERS` | unset | Resolvers for the private-IP check the stream filter performs, e.g. `1.1.1.1,1.0.0.1`. Unset means no local lookup happens at all while proxying, since the proxy does the resolution that decides where the connection goes. |
 | `WEBSHARE_API_KEY` | unset | Webshare API key. Setting it pulls the proxy pool from their API instead of listing proxies by hand. |
 | `WEBSHARE_REFRESH_HOURS` | `24` | How often to pull a fresh list. |
 | `WEBSHARE_MODE` | `direct` | The `mode` passed to Webshare's proxy list endpoint. |
@@ -113,11 +114,19 @@ to use, and proxied requests are refused rather than being sent out directly,
 because falling back would leak the address this is all meant to hide. Put a
 proxy in `EGRESS_PROXIES` as well if you would rather always have a fallback.
 
-Two things this does not cover. The stream filter still resolves destination
-hostnames locally to check them against the private IP ranges, so set
-`EGRESS_DNS_SERVERS` if you would rather that not go through your ISP's
-resolver. And `/cdn` fetches game assets directly, which exposes the server's IP
-to that one host, though not to anything a visitor chooses.
+One thing this does not cover: `/cdn` fetches game assets directly, which
+exposes the server's IP to that one host, though not to anything a visitor
+chooses.
+
+While proxying, the server does not resolve destination hostnames at all. The
+proxy performs the lookup that decides where the connection goes, from a network
+this machine never touches, so an answer resolved here would be checked against
+the private IP ranges and then thrown away. Worse, on a host whose resolver
+filters - a Pi-hole, a filtering upstream, a hosts file - ad and tracker domains
+come back as `0.0.0.0`, which reads as a private address, and the stream is
+refused for a reason that has nothing to do with where it was actually going.
+Set `EGRESS_DNS_SERVERS` to have the check performed anyway, against resolvers
+you name.
 
 Raw git hosts serve every text file as `text/plain` and attach their own
 content security policy, so the `/cdn` proxy restores the content type from the

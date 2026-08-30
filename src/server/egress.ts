@@ -108,7 +108,7 @@ const rotation = (process.env.EGRESS_ROTATION || 'round-robin').toLowerCase()
 
 let nextProxy = 0
 
-export function pickProxy(): EgressProxy {
+function pickProxy(): EgressProxy {
   const proxies = activeProxies()
 
   // Dialling out directly here would defeat the whole point, so refuse the
@@ -128,6 +128,43 @@ export function pickProxy(): EgressProxy {
   const proxy = proxies[nextProxy % proxies.length]
   nextProxy = (nextProxy + 1) % proxies.length
   return proxy
+}
+
+// How many proxies a single stream is allowed to try before it gives up.
+function connectAttempts() {
+  const value = Number(process.env.EGRESS_ATTEMPTS || 3)
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 3
+}
+
+// A pool this size always has a few members that cannot reach a given
+// destination - the provider swapped the address out, the exit is rate limited,
+// the destination is refusing that IP - and the rotation hands them out like
+// any other. One stream landing on one of them used to fail the request
+// outright, which is a dead image or a missing API response on a page that was
+// otherwise fine, and a page whose content depends on that response has nothing
+// to show.
+function pickProxies(count: number): EgressProxy[] {
+  const proxies = activeProxies()
+
+  // Dialling out directly here would defeat the whole point, so refuse the
+  // connection instead. This happens when the provider is the only source of
+  // proxies and its very first fetch failed.
+  if (!proxies.length) {
+    throw new Error('no egress proxies are available')
+  }
+
+  const wanted = Math.max(1, Math.min(count, proxies.length))
+  const chosen: EgressProxy[] = []
+
+  // Go through the rotation for each one so the pool still gets spread evenly,
+  // but stop asking for variety rather than spinning for it: sticky only ever
+  // offers a single proxy, and random can keep returning ones already picked.
+  for (let attempt = 0; chosen.length < wanted && attempt < wanted * 4; attempt++) {
+    const proxy = pickProxy()
+    if (!chosen.includes(proxy)) chosen.push(proxy)
+  }
+
+  return chosen.length ? chosen : [pickProxy()]
 }
 
 function connectTimeout() {
@@ -303,14 +340,35 @@ export class ProxiedTCPSocket {
   async connect() {
     // Throws when the pool is empty, which fails the stream rather than
     // quietly falling back to a direct connection.
-    const proxy = pickProxy()
+    const proxies = pickProxies(connectAttempts())
 
-    let socket: net.Socket
-    try {
-      socket = await openTunnel(proxy, this.hostname, this.port)
-    } catch (error) {
-      // Name the proxy, not the destination, so a broken proxy is obvious.
-      throw new Error(`${proxy.label} could not reach ${this.hostname}:${this.port} - ${(error as Error).message}`)
+    let socket: net.Socket | null = null
+    const failures: string[] = []
+
+    // Retrying is only worth it while it is cheap. A proxy that refuses
+    // CONNECT does so in a few hundred milliseconds, which leaves room for
+    // another two; one that hangs until the connect timeout has already spent
+    // everything the browser was going to wait, and trying two more would turn
+    // a slow failure into a slower one. Spending the same budget either way is
+    // what keeps this a fix rather than a trade.
+    const deadline = Date.now() + connectTimeout()
+
+    for (const proxy of proxies) {
+      try {
+        socket = await openTunnel(proxy, this.hostname, this.port)
+        break
+      } catch (error) {
+        // Name the proxy, not the destination, so a broken proxy is obvious.
+        failures.push(`${proxy.label} - ${(error as Error).message}`)
+        if (Date.now() >= deadline) break
+      }
+    }
+
+    // Every proxy we were willing to try refused or timed out, so this is the
+    // destination's problem or the pool's, not one unlucky exit. List them all:
+    // one line naming one proxy reads like that proxy is broken.
+    if (!socket) {
+      throw new Error(`could not reach ${this.hostname}:${this.port} through ${failures.length} proxy(s) - ${failures.join('; ')}`)
     }
 
     this.socket = socket
