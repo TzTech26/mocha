@@ -49,7 +49,7 @@ npm run start
 | `EGRESS_ATTEMPTS` | `3` | How many proxies one stream may try before giving up. A pool always has some members that cannot reach a given destination, and without this a stream landing on one fails the request outright. |
 | `EGRESS_BLOCK_ADS` | enabled | Refuses advertising, analytics and telemetry hosts before a proxy is picked, so they cost no dials and no bandwidth. Set to `0` to send them through the pool like anything else. |
 | `EGRESS_BLOCK` | unset | Extra hosts to refuse the same way, comma or space separated. Each entry matches that host and any subdomain of it. |
-| `EGRESS_FAILURE_TTL` | `60000` | Milliseconds to leave a destination alone after every proxy has refused to reach it. A page that keeps asking then costs one round of dials per window rather than one per request. |
+| `EGRESS_FAILURE_TTL` | `30000` | Milliseconds to leave a destination alone after every proxy has refused to reach it. A page that keeps asking then costs one round of dials per window rather than one per request. |
 | `EGRESS_FAILURE_MAX` | `900000` | Ceiling for that wait, which doubles each time the destination fails again. |
 | `EGRESS_DNS_SERVERS` | unset | Resolvers for the private-IP check the stream filter performs, e.g. `1.1.1.1,1.0.0.1`. Unset means no local lookup happens at all while proxying, since the proxy does the resolution that decides where the connection goes. |
 | `WEBSHARE_API_KEY` | unset | Webshare API key. Setting it pulls the proxy pool from their API instead of listing proxies by hand. |
@@ -128,8 +128,11 @@ chooses.
 A metered pool is spent by whatever the page asks for, and a game page asks for
 a great deal that is not the game. The advertising, analytics and telemetry
 hosts its SDK reports to are refused before a proxy is picked, so they cost
-nothing at all rather than a dial and a response each: `EGRESS_BLOCK_ADS=0`
-turns that off, and `EGRESS_BLOCK` adds hosts of your own. To the page it looks
+nothing at all rather than a dial and a response each. The list covers the
+exchanges and the cookie-sync hosts that travel with them, which is where the
+volume is - one ordinary page can touch a dozen in a second, each one a
+redirect carrying an identifier and nothing a reader would miss.
+`EGRESS_BLOCK_ADS=0` turns it off, and `EGRESS_BLOCK` adds hosts of your own. To the page it looks
 the way an ad blocker does, and a game whose ad call fails still runs.
 
 The other way a pool goes is on destinations that were never reachable. When
@@ -137,9 +140,17 @@ every proxy tried refuses a destination - which is what a proxy answers for a
 hostname that does not resolve - asking again immediately spends `EGRESS_ATTEMPTS`
 more dials on the same answer, and a page that retries every few seconds does
 that for as long as it is open. Such a destination is left alone for
-`EGRESS_FAILURE_TTL`, doubling up to `EGRESS_FAILURE_MAX` while it keeps
-failing, and forgotten as soon as it can be reached again. Only refusals count:
-a timeout says nothing about the destination, so it never holds one back.
+`EGRESS_FAILURE_TTL`, doubling up to `EGRESS_FAILURE_MAX` each time it fails
+again after a hold runs out, and forgotten as soon as it can be reached. The
+first hold is deliberately short: three refusals are good evidence but not
+proof, and a working host that drew three bad exits should be out of reach for
+seconds rather than minutes.
+
+Failures that arrive while a hold is already running do not lengthen it. A page
+opens several streams to the same host at once and they are all in flight
+before the first comes back, so counting those as repeats would let one page
+load reach the ceiling on its first attempt. Only refusals count either way: a
+timeout says nothing about the destination, so it never holds one back.
 
 While proxying, the server does not resolve destination hostnames at all. The
 proxy performs the lookup that decides where the connection goes, from a network
