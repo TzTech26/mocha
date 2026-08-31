@@ -152,12 +152,12 @@ export default function Settings() {
 
           <div class="flex w-full flex-col gap-2">
             <p class="text-center text-xs text-base-content/60">Presets</p>
-            <div class="flex w-full flex-wrap gap-2">
+            <div class="grid w-full grid-cols-2 gap-2">
               {cloakPresets.map((preset) => {
                 return (
                   // biome-ignore lint: it doesn't accept a key for some reason
                   <button
-                    class="btn btn-outline btn-sm flex-1"
+                    class="btn btn-outline btn-sm px-2 text-xs"
                     type="button"
                     onClick={() => {
                       // Fill the fields and save in one click, so the tab changes
