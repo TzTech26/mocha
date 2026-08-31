@@ -39,6 +39,7 @@ npm run start
 | --- | --- | --- |
 | `PORT` | `3003` | Port the server listens on. |
 | `DIAGNOSTICS_SECONDS` | `60` | Seconds between health lines, which report live connections, streams, memory and open file descriptors against the limits this process has. `0` turns them off. |
+| `DIAGNOSTICS_IDLE_SECONDS` | `1800` | How often a health line is printed while the server is idle. A line whose counts have not moved says nothing the last one did not, so an idle server repeats itself this often instead of every `DIAGNOSTICS_SECONDS`. Anything with a live connection or stream is still reported every time. |
 | `CDN_TARGET` | `https://gitlab.com/3kh0/3kh0-assets/-/raw/main` | Where `/cdn` fetches game assets from. The original host, `assets.3kh0.net`, stopped resolving, and the assets now live on GitLab. Point this at a mirror or a self-hosted copy if you have one. |
 | `CDN_CACHE_DIR` | `.cache/cdn` | Where fetched assets are cached on disk. |
 | `CDN_CACHE` | enabled | Set to `0` to fetch from the upstream every time. |
@@ -46,6 +47,10 @@ npm run start
 | `EGRESS_ROTATION` | `round-robin` | How to pick from the list: `round-robin`, `random`, or `sticky` (always the first). |
 | `EGRESS_TIMEOUT` | `20000` | Milliseconds to wait for a proxy to open a tunnel. Also the budget for the whole stream: a proxy that hangs this long is not followed by a retry. |
 | `EGRESS_ATTEMPTS` | `3` | How many proxies one stream may try before giving up. A pool always has some members that cannot reach a given destination, and without this a stream landing on one fails the request outright. |
+| `EGRESS_BLOCK_ADS` | enabled | Refuses advertising, analytics and telemetry hosts before a proxy is picked, so they cost no dials and no bandwidth. Set to `0` to send them through the pool like anything else. |
+| `EGRESS_BLOCK` | unset | Extra hosts to refuse the same way, comma or space separated. Each entry matches that host and any subdomain of it. |
+| `EGRESS_FAILURE_TTL` | `60000` | Milliseconds to leave a destination alone after every proxy has refused to reach it. A page that keeps asking then costs one round of dials per window rather than one per request. |
+| `EGRESS_FAILURE_MAX` | `900000` | Ceiling for that wait, which doubles each time the destination fails again. |
 | `EGRESS_DNS_SERVERS` | unset | Resolvers for the private-IP check the stream filter performs, e.g. `1.1.1.1,1.0.0.1`. Unset means no local lookup happens at all while proxying, since the proxy does the resolution that decides where the connection goes. |
 | `WEBSHARE_API_KEY` | unset | Webshare API key. Setting it pulls the proxy pool from their API instead of listing proxies by hand. |
 | `WEBSHARE_REFRESH_HOURS` | `24` | How often to pull a fresh list. |
@@ -117,6 +122,24 @@ proxy in `EGRESS_PROXIES` as well if you would rather always have a fallback.
 One thing this does not cover: `/cdn` fetches game assets directly, which
 exposes the server's IP to that one host, though not to anything a visitor
 chooses.
+
+## What the pool is not spent on
+
+A metered pool is spent by whatever the page asks for, and a game page asks for
+a great deal that is not the game. The advertising, analytics and telemetry
+hosts its SDK reports to are refused before a proxy is picked, so they cost
+nothing at all rather than a dial and a response each: `EGRESS_BLOCK_ADS=0`
+turns that off, and `EGRESS_BLOCK` adds hosts of your own. To the page it looks
+the way an ad blocker does, and a game whose ad call fails still runs.
+
+The other way a pool goes is on destinations that were never reachable. When
+every proxy tried refuses a destination - which is what a proxy answers for a
+hostname that does not resolve - asking again immediately spends `EGRESS_ATTEMPTS`
+more dials on the same answer, and a page that retries every few seconds does
+that for as long as it is open. Such a destination is left alone for
+`EGRESS_FAILURE_TTL`, doubling up to `EGRESS_FAILURE_MAX` while it keeps
+failing, and forgotten as soon as it can be reached again. Only refusals count:
+a timeout says nothing about the destination, so it never holds one back.
 
 While proxying, the server does not resolve destination hostnames at all. The
 proxy performs the lookup that decides where the connection goes, from a network
