@@ -181,41 +181,95 @@ function pickProxies(count: number): EgressProxy[] {
 // looks the way an ad blocker does - the request fails and the game carries
 // on, because a game whose ad call fails still runs.
 const adHosts = [
+  // Google's advertising and measurement stack, which is most of what a game
+  // page and a news page both reach for.
   'doubleclick.net',
   'googlesyndication.com',
   'googletagservices.com',
   'googletagmanager.com',
+  'googleadservices.com',
   'google-analytics.com',
   'analytics.google.com',
   'adservice.google.com',
   'imasdk.googleapis.com',
-  'pagead2.googleadservices.com',
-  'amazon-adsystem.com',
+
+  // Exchanges, and the cookie-sync hosts that come with them. One page can
+  // touch a dozen of these in a second, each one a redirect carrying an
+  // identifier and nothing a reader would miss.
+  '360yield.com',
+  '3lift.com',
+  'ad.gt',
+  'adform.net',
   'adnxs.com',
+  'adsrvr.org',
   'adsafeprotected.com',
-  'moatads.com',
+  'agkn.com',
+  'amazon-adsystem.com',
+  'bidswitch.net',
+  'bluekai.com',
   'casalemedia.com',
+  'contextweb.com',
   'criteo.com',
   'criteo.net',
+  'crwdcntrl.net',
+  'demdex.net',
+  'everesttech.net',
+  'gumgum.com',
+  'hadronid.net',
+  'html-load.cc',
+  'id5-sync.com',
+  'indexww.com',
+  'lijit.com',
+  'media.net',
+  'moatads.com',
   'openx.net',
   'pubmatic.com',
+  'rlcdn.com',
   'rubiconproject.com',
-  'scorecardresearch.com',
-  'sentry.io',
+  'sharethrough.com',
+  'smartadserver.com',
+  'sonobi.com',
+  'tapad.com',
+  'teads.tv',
+  'turn.com',
+  'unityads.unity3d.com',
+  'yieldmo.com',
+
+  // Content recommendation widgets, which are advertising wearing a headline.
+  'mgid.com',
+  'outbrain.com',
+  'taboola.com',
+
+  // Analytics, session recording and error reporting. None of it is the page.
   'bugsnag.com',
+  'clarity.ms',
+  'fullstory.com',
+  'hotjar.com',
   'mixpanel.com',
+  'quantserve.com',
+  'scorecardresearch.com',
   'segment.io',
-  'unityads.unity3d.com'
+  'sentry.io'
 ]
 
 // Set EGRESS_BLOCK_ADS=0 to spend the pool on these after all, and EGRESS_BLOCK
 // to add hosts of your own. Both match a host exactly or any subdomain of it.
-const blockedHosts = [...(process.env.EGRESS_BLOCK_ADS === '0' ? [] : adHosts), ...(process.env.EGRESS_BLOCK ?? '').split(/[\s,]+/).filter(Boolean)].map((host) => host.toLowerCase().replace(/^\.|\.$/g, ''))
+const blockedHosts = new Set([...(process.env.EGRESS_BLOCK_ADS === '0' ? [] : adHosts), ...(process.env.EGRESS_BLOCK ?? '').split(/[\s,]+/).filter(Boolean)].map((host) => host.toLowerCase().replace(/^\.|\.$/g, '')))
 
+// Walk the host's own suffixes rather than the list: a name has a handful of
+// them and the list only grows, and this is on the path of every single stream.
 export function isBlocked(hostname: string) {
-  const host = hostname.toLowerCase().replace(/\.$/, '')
+  let host = hostname.toLowerCase().replace(/\.$/, '')
 
-  return blockedHosts.some((entry) => host === entry || host.endsWith(`.${entry}`))
+  while (host) {
+    if (blockedHosts.has(host)) return true
+
+    const dot = host.indexOf('.')
+    if (dot === -1) return false
+    host = host.slice(dot + 1)
+  }
+
+  return false
 }
 
 // Naming a blocked host once is enough to show what is being refused. Saying
@@ -234,7 +288,13 @@ const announced = new Set<string>()
 // looked the destination up and told us it could not get there - when every
 // proxy we tried says that, the destination is the problem. A timeout says
 // nothing about the destination, so it never puts one in here.
-const failureBase = Number(process.env.EGRESS_FAILURE_TTL || 60000)
+//
+// The first hold is short on purpose. Three refusals out of a pool this size
+// is good evidence, but it is not proof, and a working host that happened to
+// draw three bad exits should be out of reach for seconds rather than
+// minutes. Somewhere genuinely unreachable fails again the moment the hold
+// ends, and that is what earns the longer ones.
+const failureBase = Number(process.env.EGRESS_FAILURE_TTL || 30000)
 const failureMax = Number(process.env.EGRESS_FAILURE_MAX || 900000)
 
 interface Penalty {
@@ -265,6 +325,18 @@ function heldBack(key: string) {
 const penaltyLimit = 1000
 
 function penalise(key: string, hostname: string) {
+  const held = penalties.get(key)
+
+  // A page opens several streams to one destination at once, and every one of
+  // them is already in flight before the first comes back. Those are a single
+  // failure arriving several times over, not a destination that failed again
+  // after being let back in, so a failure while the hold is still running
+  // neither lengthens it nor says so a second time. Without this, opening one
+  // page that asks for one unreachable host twice doubled the wait on the
+  // spot, and a page asking six times would have reached the ceiling on its
+  // first attempt - the protection locking the door on the way in.
+  if (held && Date.now() < held.until) return
+
   if (penalties.size >= penaltyLimit) {
     const now = Date.now()
     for (const [entry, penalty] of penalties) {
@@ -272,6 +344,9 @@ function penalise(key: string, hostname: string) {
     }
   }
 
+  // Only a destination that failed again after its hold ran out is held for
+  // longer. Anything that has not failed since is gone from the map entirely,
+  // because reaching it clears the entry.
   const previous = penalties.get(key)
   const wait = previous ? Math.min(previous.wait * 2, failureMax) : failureBase
 
