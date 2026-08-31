@@ -1,3 +1,4 @@
+import { A } from '@solidjs/router'
 import { createEffect, createSignal, onMount } from 'solid-js'
 import toast from 'solid-toast'
 import store from 'store2'
@@ -398,6 +399,15 @@ export default function Settings() {
           Reset
         </button>
       </div>
+
+      {/* The status page is for us, not for the people using the proxy, so it
+          gets a dot under the buttons instead of a link anyone would notice.
+          Hovering the bottom of the settings page finds it; reading the page
+          does not. */}
+      <A href="/status" class="group flex items-center gap-1 pb-8 text-[10px] uppercase tracking-widest text-base-content/10 duration-150 hover:text-base-content/50" aria-label="Status">
+        <span>&#183;</span>
+        <span class="opacity-0 duration-150 group-hover:opacity-100">status</span>
+      </A>
 
       <dialog
         class="modal"

@@ -11,6 +11,7 @@ import Home from './routes/home'
 import Privacy from './routes/privacy'
 import ProxyViewer from './routes/route'
 import Settings from './routes/settings'
+import Status from './routes/status'
 import Shortcuts from './routes/shortcuts'
 import Terms from './routes/terms'
 import Bookmarks from './routes/bookmarks'
@@ -107,6 +108,7 @@ render(
       <Route path="/terms" component={Terms} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/settings" component={Settings} />
+      <Route path="/status" component={Status} />
     </Router>
   ),
   root

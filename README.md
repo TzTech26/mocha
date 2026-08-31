@@ -41,6 +41,12 @@ npm run start
 | `DIAGNOSTICS_SECONDS` | `60` | Seconds between health lines, which report live connections, streams, memory and open file descriptors against the limits this process has. `0` turns them off. |
 | `DIAGNOSTICS_IDLE_SECONDS` | `1800` | How often a health line is printed while the server is idle. A line whose counts have not moved says nothing the last one did not, so an idle server repeats itself this often instead of every `DIAGNOSTICS_SECONDS`. Anything with a live connection or stream is still reported every time. |
 | `CDN_TARGET` | `https://gitlab.com/3kh0/3kh0-assets/-/raw/main` | Where `/cdn` fetches game assets from. The original host, `assets.3kh0.net`, stopped resolving, and the assets now live on GitLab. Point this at a mirror or a self-hosted copy if you have one. |
+| `STATUS_DATA_FILE` | `.cache/status.json` | Where the visitor total is kept so a restart does not reset it. Mount a volume on the directory to keep it across deploys. |
+| `STATUS_PERSIST` | enabled | Set to `0` to keep the total in memory only, so it starts from zero on every restart. |
+| `STATUS_ACTIVE_SECONDS` | `90` | How long since a browser's last ping still counts as active. Browsers ping every 30 seconds, so this forgives one missed ping. |
+| `STATUS_MAX_VISITORS` | `200000` | How many visitor ids the total remembers. Past this the oldest are forgotten, and one of those visitors returning is counted again. |
+| `STATUS_MAX_ACTIVE` | `50000` | Ceiling on ids held for the active count, so a script inventing ids cannot grow it without bound. |
+| `STATUS_SAVE_SECONDS` | `15` | How long to wait after the total moves before writing it to disk, so a rush of arrivals is one write. |
 | `CDN_CACHE_DIR` | `.cache/cdn` | Where fetched assets are cached on disk. |
 | `CDN_CACHE` | enabled | Set to `0` to fetch from the upstream every time. |
 | `EGRESS_PROXIES` | unset | Upstream proxies to route proxied traffic through, comma or newline separated. Unset means connections are made straight from this server. |

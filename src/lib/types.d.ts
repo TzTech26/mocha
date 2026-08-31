@@ -55,6 +55,13 @@ export interface Bookmark {
   url: string
 }
 
+export interface StatusData {
+  active: number
+  total: number
+  uptime: number
+  startedAt: number
+}
+
 export interface DebugData {
   enabled: boolean
 }

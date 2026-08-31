@@ -27,6 +27,10 @@ export default function Privacy() {
       <section class="flex flex-col gap-2">
         <h2 class="text-2xl font-semibold">Analytics</h2>
         <p>We use Plausible Analytics to count page views. Plausible does not use cookies and does not collect personal data or track people across sites. It tells us how many people visit, not who they are.</p>
+        <p>
+          Our own server also keeps a count of how many people are using Mocha. Your browser makes up a random id, keeps it in local storage, and sends it so that two visits from you are not counted as two people. The id is not tied to your name, your account, or anything you browse, and clearing your browser
+          data replaces it with a new one.
+        </p>
       </section>
 
       <section class="flex flex-col gap-2">
