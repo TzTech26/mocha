@@ -167,6 +167,126 @@ function pickProxies(count: number): EgressProxy[] {
   return chosen.length ? chosen : [pickProxy()]
 }
 
+// A game page asks for the same set of advertising, analytics and video-ad
+// hosts on every single load, and a page that keeps running asks again on a
+// timer. None of those requests are the game: they are what the game's SDK
+// reports back to its publisher. Through a metered pool every one of them
+// costs a dial and the bandwidth of whatever comes back, which is why a
+// half-hour of one game can spend more of the pool on ad calls than on the
+// game itself.
+//
+// Refusing them here rather than in the browser is what makes the saving real.
+// A page-side blocker still lets the request leave; this stops it before a
+// proxy is picked, so a blocked host costs nothing at all. To the page it
+// looks the way an ad blocker does - the request fails and the game carries
+// on, because a game whose ad call fails still runs.
+const adHosts = [
+  'doubleclick.net',
+  'googlesyndication.com',
+  'googletagservices.com',
+  'googletagmanager.com',
+  'google-analytics.com',
+  'analytics.google.com',
+  'adservice.google.com',
+  'imasdk.googleapis.com',
+  'pagead2.googleadservices.com',
+  'amazon-adsystem.com',
+  'adnxs.com',
+  'adsafeprotected.com',
+  'moatads.com',
+  'casalemedia.com',
+  'criteo.com',
+  'criteo.net',
+  'openx.net',
+  'pubmatic.com',
+  'rubiconproject.com',
+  'scorecardresearch.com',
+  'sentry.io',
+  'bugsnag.com',
+  'mixpanel.com',
+  'segment.io',
+  'unityads.unity3d.com'
+]
+
+// Set EGRESS_BLOCK_ADS=0 to spend the pool on these after all, and EGRESS_BLOCK
+// to add hosts of your own. Both match a host exactly or any subdomain of it.
+const blockedHosts = [...(process.env.EGRESS_BLOCK_ADS === '0' ? [] : adHosts), ...(process.env.EGRESS_BLOCK ?? '').split(/[\s,]+/).filter(Boolean)].map((host) => host.toLowerCase().replace(/^\.|\.$/g, ''))
+
+export function isBlocked(hostname: string) {
+  const host = hostname.toLowerCase().replace(/\.$/, '')
+
+  return blockedHosts.some((entry) => host === entry || host.endsWith(`.${entry}`))
+}
+
+// Naming a blocked host once is enough to show what is being refused. Saying
+// it on every request would replace the traffic we just stopped with a log
+// line per request, which is the same storm in a different file.
+const announced = new Set<string>()
+
+// A destination that cannot be reached is not reached any faster the second
+// time, and a page does not stop asking: the log that prompted this shows the
+// same four hosts retried every twelve seconds for minutes, each retry
+// spending EGRESS_ATTEMPTS dials of the pool on an answer that was never going
+// to change. Holding a failed destination back for a while turns that from a
+// cost per retry into a cost per window.
+//
+// Only refusals count. A proxy that answers CONNECT with an error status has
+// looked the destination up and told us it could not get there - when every
+// proxy we tried says that, the destination is the problem. A timeout says
+// nothing about the destination, so it never puts one in here.
+const failureBase = Number(process.env.EGRESS_FAILURE_TTL || 60000)
+const failureMax = Number(process.env.EGRESS_FAILURE_MAX || 900000)
+
+interface Penalty {
+  until: number
+  wait: number
+}
+
+const penalties = new Map<string, Penalty>()
+
+function heldBack(key: string) {
+  const penalty = penalties.get(key)
+  if (!penalty) return 0
+
+  const remaining = penalty.until - Date.now()
+
+  return remaining > 0 ? remaining : 0
+}
+
+// An entry outlives its own hold, so that a destination which fails again is
+// held longer the next time - somewhere unreachable for an hour is asked about
+// four times an hour rather than three hundred. That also means nothing
+// removes entries on its own. A page pointed at enough
+// dead destinations would grow this map for as long as the process runs, so
+// forget the ones whose hold has expired once there are enough to be worth
+// forgetting. The cost is that a host nobody has asked about in a while starts
+// again from the base wait, which is the right answer for one that has since
+// come back.
+const penaltyLimit = 1000
+
+function penalise(key: string, hostname: string) {
+  if (penalties.size >= penaltyLimit) {
+    const now = Date.now()
+    for (const [entry, penalty] of penalties) {
+      if (penalty.until <= now) penalties.delete(entry)
+    }
+  }
+
+  const previous = penalties.get(key)
+  const wait = previous ? Math.min(previous.wait * 2, failureMax) : failureBase
+
+  penalties.set(key, { until: Date.now() + wait, wait })
+  consola.warn(`every proxy refused ${hostname} - not trying it again for ${Math.round(wait / 1000)}s`)
+}
+
+function reached(key: string) {
+  penalties.delete(key)
+}
+
+// Long enough for a request that is already on its way to arrive at a stream
+// that is about to end, short enough that the page is not left waiting.
+const deadEndGrace = 250
+
 function connectTimeout() {
   const value = Number(process.env.EGRESS_TIMEOUT || 20000)
   return Number.isFinite(value) && value > 0 ? value : 20000
@@ -292,6 +412,12 @@ export async function openTunnel(proxy: EgressProxy, hostname: string, port: num
 class AsyncQueue<T> {
   private queue: T[] = []
   private waiting: (() => void)[] = []
+  // close() only wakes the readers that are already waiting. A read that
+  // arrives afterwards has nothing to wake it, so it would wait for a queue
+  // nobody is going to write to again - the stream stays open holding a socket
+  // that is already gone. Remembering that it closed is what lets that read
+  // answer straight away.
+  private closed = false
 
   constructor(readonly maxSize: number) {}
 
@@ -302,6 +428,7 @@ class AsyncQueue<T> {
 
   async get(): Promise<T | undefined> {
     if (this.queue.length > 0) return this.queue.shift()
+    if (this.closed) return undefined
 
     await new Promise<void>((resolve) => {
       this.waiting.push(resolve)
@@ -311,6 +438,7 @@ class AsyncQueue<T> {
   }
 
   close() {
+    this.closed = true
     this.queue = []
     let resolve = this.waiting.shift()
     while (resolve) {
@@ -338,12 +466,31 @@ export class ProxiedTCPSocket {
   ) {}
 
   async connect() {
+    const key = `${this.hostname}:${this.port}`
+
+    if (isBlocked(this.hostname)) {
+      if (!announced.has(this.hostname)) {
+        announced.add(this.hostname)
+        consola.info(`not spending the pool on ${this.hostname} - it is on the blocked list`)
+      }
+
+      return this.deadEnd()
+    }
+
+    if (heldBack(key)) return this.deadEnd()
+
     // Throws when the pool is empty, which fails the stream rather than
     // quietly falling back to a direct connection.
     const proxies = pickProxies(connectAttempts())
 
     let socket: net.Socket | null = null
     const failures: string[] = []
+
+    // A proxy that answers CONNECT with an error status, or a SOCKS proxy that
+    // rejects the connection, has tried the destination on our behalf and
+    // failed. That is the only kind of failure that says anything about the
+    // destination itself, so it is the only kind that holds one back.
+    let refusals = 0
 
     // Retrying is only worth it while it is cheap. A proxy that refuses
     // CONNECT does so in a few hundred milliseconds, which leaves room for
@@ -358,8 +505,11 @@ export class ProxiedTCPSocket {
         socket = await openTunnel(proxy, this.hostname, this.port)
         break
       } catch (error) {
+        const message = (error as Error).message
+
         // Name the proxy, not the destination, so a broken proxy is obvious.
-        failures.push(`${proxy.label} - ${(error as Error).message}`)
+        failures.push(`${proxy.label} - ${message}`)
+        if (/refused CONNECT|rejected connection/.test(message)) refusals++
         if (Date.now() >= deadline) break
       }
     }
@@ -368,8 +518,14 @@ export class ProxiedTCPSocket {
     // destination's problem or the pool's, not one unlucky exit. List them all:
     // one line naming one proxy reads like that proxy is broken.
     if (!socket) {
+      if (refusals === failures.length) penalise(key, this.hostname)
+
       throw new Error(`could not reach ${this.hostname}:${this.port} through ${failures.length} proxy(s) - ${failures.join('; ')}`)
     }
+
+    // Whatever was wrong with this destination is not wrong any more, so stop
+    // holding it back.
+    reached(key)
 
     this.socket = socket
     streamOpened()
@@ -393,6 +549,21 @@ export class ProxiedTCPSocket {
     // point. An explicitly paused stream is not restarted by adding a data
     // handler, so start it flowing here.
     socket.resume()
+  }
+
+  // A stream we are refusing to spend a proxy on still has to end somehow.
+  // Failing it makes wisp-js log the whole pool at warn level, which replaces
+  // the traffic just saved with a wall of text about saving it, so end the
+  // stream instead: nothing to read, nothing to send, and the page sees what
+  // it would see from an ad blocker.
+  //
+  // Ending it on the next tick rather than this one is what keeps that quiet.
+  // The browser sends its request bytes immediately behind the connect, and a
+  // stream that has already gone makes wisp-js warn about a DATA packet for a
+  // stream which doesn't exist - one warning per blocked request, which is the
+  // noise this was written to avoid.
+  private deadEnd() {
+    setTimeout(() => this.queue.close(), deadEndGrace).unref()
   }
 
   async recv() {

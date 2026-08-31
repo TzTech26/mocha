@@ -22,6 +22,14 @@ import { consola } from 'consola'
 // Seconds between health lines. 0 turns them off.
 const period = Number(process.env.DIAGNOSTICS_SECONDS ?? 60)
 
+// An idle server prints the same line every minute for as long as nobody is
+// using it, and a day of that is 1440 copies of connections=0 to scroll past
+// before reaching the traffic anyone is actually reading the log for. The
+// counts have not changed, so neither has anything the line was written to
+// say. Repeating one only every half hour keeps the proof that the process is
+// alive without burying the part that is not repetition.
+const idlePeriod = Number(process.env.DIAGNOSTICS_IDLE_SECONDS ?? 1800)
+
 // Fraction of either limit that is close enough to be worth a warning of its
 // own, rather than a number buried in a health line nobody is reading yet.
 const pressure = 0.8
@@ -31,6 +39,8 @@ let streams = 0
 let peakStreams = 0
 let totalStreams = 0
 let warned = false
+let lastLine = ''
+let lastPrinted = 0
 
 export function connectionOpened() {
   connections++
@@ -109,8 +119,21 @@ export function startDiagnostics() {
     setInterval(() => {
       const memory = process.memoryUsage()
       const openFiles = openDescriptors()
+      const line = `health: connections=${connections} streams=${streams} peak=${peakStreams} total=${totalStreams} rss=${megabytes(memory.rss)}MB/${megabytes(memoryCeiling)}MB buffers=${megabytes(memory.arrayBuffers)}MB descriptors=${openFiles}${descriptors ? `/${descriptors}` : ''}`
 
-      consola.info(`health: connections=${connections} streams=${streams} peak=${peakStreams} total=${totalStreams} rss=${megabytes(memory.rss)}MB/${megabytes(memoryCeiling)}MB buffers=${megabytes(memory.arrayBuffers)}MB descriptors=${openFiles}${descriptors ? `/${descriptors}` : ''}`)
+      // Only a server holding nothing and having done nothing since the last
+      // line is repeating itself. Anything live is worth a line every time,
+      // because memory and descriptors move underneath counts that do not.
+      const counts = `${connections}/${streams}/${totalStreams}`
+      const quiet = connections === 0 && streams === 0 && counts === lastLine
+      const due = Date.now() - lastPrinted >= idlePeriod * 1000
+
+      if (!quiet || due) {
+        consola.info(line)
+        lastPrinted = Date.now()
+      }
+
+      lastLine = counts
 
       // Say it plainly the first time either ceiling comes into view, since
       // the health line above is the sort of thing that gets read after the
