@@ -13,6 +13,7 @@ import { consola } from 'consola'
 import express from 'express'
 import { build } from 'vite'
 import { startDiagnostics } from './src/server/diagnostics'
+import { handleStatusRequest } from './src/server/status'
 import { routeWisp } from './src/server/wisp'
 
 startDiagnostics()
@@ -93,6 +94,11 @@ app.use(proxyPrefix, (_req, res) => {
 </html>
 `)
 })
+
+// The numbers behind the status page, and the ping a browser sends so it can
+// be counted as here. Mounted before the static files and the catch all, or
+// index.html would answer it with a 200 and the page would parse HTML as JSON.
+app.use('/api/status', handleStatusRequest)
 
 app.use(express.static('dist'))
 

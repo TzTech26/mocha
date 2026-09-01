@@ -2,6 +2,7 @@ import { execSync } from 'node:child_process'
 import { defineConfig, normalizePath } from 'vite'
 import solid from 'vite-plugin-solid'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
+import { handleStatusRequest } from './src/server/status'
 import { routeWisp } from './src/server/wisp'
 
 import path from 'node:path'
@@ -31,6 +32,15 @@ const cdnTarget = process.env.CDN_TARGET || 'https://assets.3kh0.net'
 export default defineConfig({
   plugins: [
     solid(),
+    {
+      // Express serves this in production. Without it here the status page is
+      // blank in development, which reads as a broken page rather than a
+      // missing dev server route.
+      name: 'Status API',
+      configureServer(server) {
+        server.middlewares.use('/api/status', handleStatusRequest)
+      }
+    },
     {
       name: 'Wisp Server',
       configureServer(server) {
