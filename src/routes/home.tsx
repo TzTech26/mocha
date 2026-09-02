@@ -1,14 +1,37 @@
 import { A, useNavigate } from '@solidjs/router'
 import { Dot, Search } from 'lucide-solid'
-import { createSignal } from 'solid-js'
+import { For, Show, createSignal, onMount } from 'solid-js'
+import { gameImage, playGame } from '../lib/games'
+import { fetchTopGames } from '../lib/status'
+import type { GameData, TopGame } from '../lib/types'
+
+// Five is enough to be a shortcut without turning the home page into the games
+// page, which is one click away for anybody who wants the other 284.
+const popularCount = 5
 
 export default function Home() {
   const [query, setQuery] = createSignal('')
+  const [popular, setPopular] = createSignal<{ game: GameData; plays: number }[]>([])
   const navigate = useNavigate()
   function processInput() {
     if (!query()) return
     navigate(`/route/${btoa(query())}`)
   }
+
+  onMount(async () => {
+    // The server counts plays by id, because that is all it is told. The names
+    // and the artwork live in games.json, so the two are joined here rather
+    // than teaching the server what a game is called.
+    const top = await fetchTopGames(popularCount)
+
+    if (!top.length) return
+
+    const games: GameData[] = await fetch('/games.json')
+      .then((response) => response.json())
+      .catch(() => [])
+
+    setPopular(top.map((entry: TopGame) => ({ plays: entry.plays, game: games.find((game) => game.id === entry.id) })).filter((entry): entry is { plays: number; game: GameData } => Boolean(entry.game)))
+  })
   return (
     <div>
       <div class="absolute left-1/2 top-1/2 flex w-screen -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-4">
@@ -38,6 +61,27 @@ export default function Home() {
             <Search class="h-5 w-5" />
           </button>
         </div>
+
+        {/* Nothing until a game has actually been played: an empty row of
+            placeholders says less than no row at all. */}
+        <Show when={popular().length > 0}>
+          <div class="flex flex-col items-center gap-3 pt-8">
+            <p class="text-xs uppercase tracking-widest text-base-content/40">Most played</p>
+            <div class="flex flex-wrap justify-center gap-3 px-4">
+              <For each={popular()}>
+                {(entry) => (
+                  <button type="button" class="w-36 overflow-hidden rounded-btn bg-base-300 text-left duration-150 hover:bg-base-200" onClick={() => playGame(entry.game, navigate)}>
+                    <img src={gameImage(entry.game)} alt="" class="h-20 w-full bg-base-200 object-cover" />
+                    <div class="px-2.5 py-2">
+                      <p class="truncate text-sm font-medium">{entry.game.name}</p>
+                      <p class="text-xs text-base-content/50">{entry.plays.toLocaleString()} plays</p>
+                    </div>
+                  </button>
+                )}
+              </For>
+            </div>
+          </div>
+        </Show>
       </div>
 
       <div class="absolute bottom-0 flex w-screen items-center justify-between p-4 px-6 text-sm">
