@@ -55,10 +55,54 @@ export interface Bookmark {
   url: string
 }
 
+export interface TopGame {
+  id: string
+  plays: number
+  players: number
+  repeats: number
+  today: number
+  playing: number
+}
+
+export interface HistoryHour {
+  hour: number
+  peak: number
+  plays: number
+}
+
 export interface StatusData {
-  active: number
-  total: number
-  uptime: number
+  now: {
+    active: number
+    watching: number
+    playing: number
+    proxying: number
+  }
+  people: {
+    total: number
+    returning: number
+    newToday: number
+    activeToday: number
+    activeWeek: number
+    peak: number
+    peakAt: number
+  }
+  games: {
+    plays: number
+    playsDay: number
+    players: number
+    tracked: number
+    top: TopGame[]
+  }
+  uptime: {
+    current: number
+    longest: number
+    since: number
+    restarts: number
+    up: number
+    down: number
+    percent: number | null
+  }
+  history: HistoryHour[]
   startedAt: number
 }
 

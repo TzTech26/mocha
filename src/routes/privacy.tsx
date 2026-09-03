@@ -31,6 +31,10 @@ export default function Privacy() {
           Our own server also keeps a count of how many people are using Mocha. Your browser makes up a random id, keeps it in local storage, and sends it so that two visits from you are not counted as two people. The id is not tied to your name, your account, or anything you browse, and clearing your browser
           data replaces it with a new one.
         </p>
+        <p>
+          Along with it we record which page of Mocha you have open - the home page, the proxy, a game, or the status page - and, when you open a game, which game it was. That is what the counts on the status page and the most played row on the home page are built from. We do not record the addresses you
+          visit through the proxy.
+        </p>
       </section>
 
       <section class="flex flex-col gap-2">

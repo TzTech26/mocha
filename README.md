@@ -41,12 +41,16 @@ npm run start
 | `DIAGNOSTICS_SECONDS` | `60` | Seconds between health lines, which report live connections, streams, memory and open file descriptors against the limits this process has. `0` turns them off. |
 | `DIAGNOSTICS_IDLE_SECONDS` | `1800` | How often a health line is printed while the server is idle. A line whose counts have not moved says nothing the last one did not, so an idle server repeats itself this often instead of every `DIAGNOSTICS_SECONDS`. Anything with a live connection or stream is still reported every time. |
 | `CDN_TARGET` | `https://gitlab.com/3kh0/3kh0-assets/-/raw/main` | Where `/cdn` fetches game assets from. The original host, `assets.3kh0.net`, stopped resolving, and the assets now live on GitLab. Point this at a mirror or a self-hosted copy if you have one. |
-| `STATUS_DATA_FILE` | `.cache/status.json` | Where the visitor total is kept so a restart does not reset it. Mount a volume on the directory to keep it across deploys. |
-| `STATUS_PERSIST` | enabled | Set to `0` to keep the total in memory only, so it starts from zero on every restart. |
-| `STATUS_ACTIVE_SECONDS` | `90` | How long since a browser's last ping still counts as active. Browsers ping every 30 seconds, so this forgives one missed ping. |
-| `STATUS_MAX_VISITORS` | `200000` | How many visitor ids the total remembers. Past this the oldest are forgotten, and one of those visitors returning is counted again. |
-| `STATUS_MAX_ACTIVE` | `50000` | Ceiling on ids held for the active count, so a script inventing ids cannot grow it without bound. |
-| `STATUS_SAVE_SECONDS` | `15` | How long to wait after the total moves before writing it to disk, so a rush of arrivals is one write. |
+| `STATUS_DATA_FILE` | `.cache/status.json` | Where the counts and the uptime record are kept so a restart does not reset them. This is the only durable state Mocha has - see [What the status page counts](#what-the-status-page-counts). |
+| `STATUS_PERSIST` | enabled | Set to `0` to keep everything in memory, so the totals and the uptime record start from zero on every restart. |
+| `STATUS_ACTIVE_SECONDS` | `90` | How long since a browser's last ping still counts as being here. Browsers ping every 30 seconds, so this forgives one missed ping. |
+| `STATUS_HEARTBEAT_SECONDS` | `30` | How often the server records that it is still alive. A gap longer than twice this is counted as downtime, so it also sets how precisely an outage can be measured. |
+| `STATUS_MAX_VISITORS` | `100000` | How many people the totals remember individually. Past this the oldest are forgotten, and one of them returning is counted as new. |
+| `STATUS_MAX_ACTIVE` | `50000` | Ceiling on tabs held for the live counts, so a script inventing ids cannot grow them without bound. |
+| `STATUS_MAX_GAMES` | `2000` | Ceiling on how many different games are tracked, for the same reason. |
+| `STATUS_MAX_GAMES_PER_VISITOR` | `100` | How many games one person's record remembers. Somebody who plays more different games than this starts counting as a new player of the next one. |
+| `STATUS_TOP_GAMES` | `8` | How many games the status page's table lists. The home page asks for five regardless. |
+| `STATUS_SAVE_SECONDS` | `60` | How long to wait after something changes before writing to disk, so a rush of arrivals is one write. |
 | `CDN_CACHE_DIR` | `.cache/cdn` | Where fetched assets are cached on disk. |
 | `CDN_CACHE` | enabled | Set to `0` to fetch from the upstream every time. |
 | `EGRESS_PROXIES` | unset | Upstream proxies to route proxied traffic through, comma or newline separated. Unset means connections are made straight from this server. |
@@ -178,6 +182,47 @@ the server rather than the browser, so each asset is cached on disk the first
 time it is requested and served locally afterwards. The games page pulls
 hundreds of thumbnails in one view, so mount a volume on `CDN_CACHE_DIR` to keep
 the cache across deploys instead of refetching all of them on every boot.
+
+## What the status page counts
+
+`/status` is not linked from the navbar - the way in is a dot under the buttons
+at the bottom of the settings page. It answers three kinds of question: who is
+here now, how much Mocha has been used, and how much of the time it has been up.
+
+Nobody signs in, so people are counted the only way a proxy can. A browser makes
+up a random id, keeps it in local storage, and pings every 30 seconds with the
+kind of page it is on: an ordinary page, the proxy, a game, or the status page
+itself. Someone sitting on the status page watching the numbers is deliberately
+left out of them - they are reading, not using it. Pings are per tab and counts
+are per person, so three windows are one of us. No IP address is stored and
+nothing about which sites are proxied is recorded; opening a game records the
+game's id, which is where the most-played row on the home page comes from.
+
+Uptime is measured rather than assumed. The server writes the time beside
+`STATUS_DATA_FILE` every `STATUS_HEARTBEAT_SECONDS`, and on the next start the
+gap between that timestamp and now is downtime - anything longer than two
+heartbeats, so swapping containers on a deploy is not counted as an outage. That
+is what makes the percentage real: it is the share of measured time the server
+was answering, kept across restarts along with the totals, how many people came
+back, and what has been played.
+
+**That is the only state Mocha keeps, and it needs a volume.** Without one
+the container's filesystem goes away with the container, so every deploy resets
+the totals to zero and the uptime record starts again - and, because uptime is
+measured from a timestamp that no longer exists, the time the server was down is
+not counted either. Mount a volume on the directory holding `STATUS_DATA_FILE`
+(`/app/.cache` in the image, which also holds `CDN_CACHE_DIR`) and both survive.
+On Coolify that is a persistent storage entry with `/app/.cache` as the mount
+path; in Compose it is a named volume on `/app/.cache`.
+
+There are two files, both in that directory. The counts are written when they
+change and at most once a minute, so a deploy loses at most the last minute of
+them. Beside them sits a few hundred byte `.uptime` companion holding only the
+uptime record, rewritten every heartbeat: that is what a kill leaves behind to
+measure the outage from, and keeping it separate means an idle server with a
+long history is not rewriting every visitor it has ever seen every 30 seconds.
+Both are written atomically, through a temporary file and a rename, so a read
+that lands mid-write never sees half a file.
 
 ## Support us
 If you like Mocha and would like to support the development, you can donate to me [here](https://buymeacoffee.com/proudparrot2). It helps with server costs, domains, and otherwise financially supports me.
