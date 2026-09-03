@@ -1,3 +1,4 @@
+import { A } from '@solidjs/router'
 import { For, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js'
 import { fetchStatus, formatDuration, formatPercent } from '../lib/status'
 import type { GameData, StatusData } from '../lib/types'
@@ -167,6 +168,13 @@ export default function Status() {
             </Section>
 
             <Section title="Games">
+              <p class="-mt-1 text-xs text-base-content/40">
+                How much they are played, not whether they work.{' '}
+                <A href="/reports" class="link">
+                  The reports page
+                </A>{' '}
+                is where a game that stopped working is flagged.
+              </p>
               <div class="grid w-full grid-cols-2 gap-3 sm:grid-cols-4">
                 <Tile label="Plays" value={data().games.plays.toLocaleString()} note="Games opened, all time" />
                 <Tile label="Last 24h" value={data().games.playsDay.toLocaleString()} note="Games opened in the last day" />

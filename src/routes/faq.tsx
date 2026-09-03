@@ -33,6 +33,31 @@ export default function FAQ() {
 
       <div class="collapse collapse-arrow bg-base-200">
         <input type="checkbox" name="faq" />
+        <div class="collapse-title text-xl font-medium">A game doesn't work. What now?</div>
+        <div class="collapse-content">
+          <p>
+            Games are hosted somewhere else and break without telling anybody, so the flag in the bottom left corner while you are playing one is how to say so. Everything anybody has reported is on the{' '}
+            <A href="/reports" class="underline underline-offset-2">
+              reports page
+            </A>
+            , along with the games somebody flagged that everybody else is playing fine. One report never takes a game down on its own - if one works for you, say that instead, and it counts.
+          </p>
+        </div>
+      </div>
+
+      <div class="collapse collapse-arrow bg-base-200">
+        <input type="checkbox" name="faq" />
+        <div class="collapse-title text-xl font-medium">A game ignores my keyboard</div>
+        <div class="collapse-content">
+          <p>
+            A game only hears the keyboard while it holds focus, and some of them never take it. Mocha hands it over when the game loads and again whenever you click, and copies any key that still lands on the page around it into the game, so this should fix itself. If a game is still deaf, report it with the
+            flag in the corner: keyboard problems are counted separately from a game that will not load at all.
+          </p>
+        </div>
+      </div>
+
+      <div class="collapse collapse-arrow bg-base-200">
+        <input type="checkbox" name="faq" />
         <div class="collapse-title text-xl font-medium">Why is the proxy slow?</div>
         <div class="collapse-content">
           <p>The proxy is hosted on a shared server that serves all users. If there is a significant amount of users at one time, it can cause network congestion and slow down requests. </p>

@@ -20,6 +20,7 @@ import fsp from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import path from 'node:path'
 import { consola } from 'consola'
+import { notePresence } from './reports'
 
 const startedAt = Date.now()
 
@@ -378,8 +379,15 @@ function touch(id: string, at: number) {
 function ping(tab: string, id: string, kind: Presence, game?: string) {
   if (tabs.size >= maxPresence && !tabs.has(tab)) return
 
-  tabs.set(tab, { visitor: id, at: Date.now(), kind, game })
-  touch(id, Date.now())
+  const at = Date.now()
+
+  tabs.set(tab, { visitor: id, at, kind, game })
+  touch(id, at)
+
+  // How long a tab stays on a game is the half of a game's health nobody has
+  // to report, and this ping is the only place that is visible. Tabs that are
+  // not on a game are told so too, since leaving one is what ends a visit.
+  notePresence(tab, id, kind === 'game' ? game : undefined, at)
 }
 
 function play(id: string, name: string) {

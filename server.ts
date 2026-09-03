@@ -13,6 +13,7 @@ import { consola } from 'consola'
 import express from 'express'
 import { build } from 'vite'
 import { startDiagnostics } from './src/server/diagnostics'
+import { handleReportsRequest } from './src/server/reports'
 import { handleStatusRequest } from './src/server/status'
 import { routeWisp } from './src/server/wisp'
 
@@ -99,6 +100,10 @@ app.use(proxyPrefix, (_req, res) => {
 // be counted as here. Mounted before the static files and the catch all, or
 // index.html would answer it with a 200 and the page would parse HTML as JSON.
 app.use('/api/status', handleStatusRequest)
+
+// What people have said about which games work, and the same reason for
+// mounting it here: the catch all would answer it with the page.
+app.use('/api/reports', handleReportsRequest)
 
 app.use(express.static('dist'))
 

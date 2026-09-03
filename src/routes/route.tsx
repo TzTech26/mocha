@@ -1,33 +1,87 @@
 import { A, useParams, useSearchParams } from '@solidjs/router'
 import clsx from 'clsx'
-import { Bookmark, ChevronLeft, ChevronRight, CircleAlert, FileCode, Home, PanelBottomClose, PanelBottomOpen, RotateCw, SquareArrowOutUpRight, TriangleAlert } from 'lucide-solid'
-import { createEffect, createSignal, onMount } from 'solid-js'
+import { Bookmark, ChevronLeft, ChevronRight, CircleAlert, FileCode, Flag, Home, PanelBottomClose, PanelBottomOpen, RotateCw, SquareArrowOutUpRight, TriangleAlert } from 'lucide-solid'
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js'
 import toast from 'solid-toast'
 import store from 'store2'
 import { openAbWindow } from '../lib/aboutblank'
+import { bookmarks, handleBookmark } from '../lib/bookmarks'
+import { gameIdFromTarget } from '../lib/games'
+import { focusFrame, watchKeyboard } from '../lib/keyboard'
 import { handlePanicKey } from '../lib/panic'
 import { patches } from '../lib/patch'
+import { fetchGameReport, reportKinds, sendReport, verdicts } from '../lib/reports'
 import { handleTransport } from '../lib/transport'
-import type { ContentWindow, DevtoolsData, TransportData } from '../lib/types'
+import type { ContentWindow, DevtoolsData, GameReport, ReportKind, TransportData } from '../lib/types'
 import { encodeXor, formatSearch, getFavicon } from '../lib/utils'
-import { bookmarks, handleBookmark } from '../lib/bookmarks'
 
 export const [proxyReady, setProxyStatus] = createSignal(false)
 
 export default function Route() {
   let ref: HTMLIFrameElement
+  let reportDialog: HTMLDialogElement
   const [url, setUrl] = createSignal('')
   const [showControls, setShowControls] = createSignal(true)
   const [bookmarked, setBookmarked] = createSignal(false)
+  const [report, setReport] = createSignal<GameReport | null>(null)
 
   const params = useParams()
   const [searchParams] = useSearchParams()
+
+  // Which game this is, if it is one. Games are the only thing here worth
+  // offering to report: everything else in the viewer is somebody's own address
+  // and nobody else will ever open it.
+  const game = createMemo(() => {
+    try {
+      return gameIdFromTarget(atob(params.route))
+    } catch {
+      return null
+    }
+  })
 
   onMount(() => {
     if (searchParams.hidecontrolbar === 'true') {
       setShowControls(false)
     }
+
+    // Games only hear the keyboard while the frame holds focus, and arriving
+    // here gives it to the page instead. See src/lib/keyboard.ts.
+    onCleanup(watchKeyboard(() => ref))
   })
+
+  async function openReport() {
+    const id = game()
+
+    if (!id) return
+
+    reportDialog.showModal()
+    setReport(await fetchGameReport(id))
+  }
+
+  async function say(kind: ReportKind | 'none') {
+    const id = game()
+
+    if (!id) return
+
+    const next = await sendReport(id, kind)
+
+    if (next) setReport(next)
+
+    reportDialog.close()
+
+    if (kind === 'keyboard') {
+      // The report is worth having, and so is trying the fix while they are
+      // still sitting in front of the game.
+      focusFrame(ref)
+      toast.success('Reported. The game has been handed the keyboard back - try the keys again.')
+    } else if (kind === 'none') {
+      toast.success('Your report has been taken back.')
+    } else if (kind === 'works') {
+      toast.success('Noted - that counts against anything reported here.')
+    } else {
+      toast.success("Reported. It's on the reports page now.")
+    }
+  }
 
   createEffect(() => {
     // Read what this depends on before the guard. An effect that returns
@@ -52,6 +106,10 @@ export default function Route() {
     setUrl(contentWindow.__uv$location.href)
 
     contentWindow.addEventListener('keydown', handlePanicKey)
+
+    // Hand the keyboard to what just loaded. Without this a game waits for a
+    // click that lands on something focusable, which some of them never have.
+    focusFrame(ref)
 
     if (bookmarks().some((val) => val.url === contentWindow.__uv$location.href)) {
       setBookmarked(true)
@@ -147,7 +205,7 @@ export default function Route() {
         title="Viewer"
       />
 
-      <div class={clsx('rounded-m join fixed left-1/2 z-40 -translate-x-1/2 bg-base-200 px-2 transition-[bottom] duration-300', showControls() ? 'bottom-2' : '-bottom-16')}>
+      <div data-viewer-controls class={clsx('rounded-m join fixed left-1/2 z-40 -translate-x-1/2 bg-base-200 px-2 transition-[bottom] duration-300', showControls() ? 'bottom-2' : '-bottom-16')}>
         <div class="tooltip" data-tip="Go back">
           <button
             class="btn btn-square join-item bg-base-200"
@@ -284,13 +342,87 @@ export default function Route() {
         </div>
       </div>
 
-      <div class={clsx('fixed bottom-2 right-2 transition-opacity duration-300', showControls() ? 'opacity-0 pointer-events-none' : 'opacity-100')}>
+      <div data-viewer-controls class={clsx('fixed bottom-2 right-2 transition-opacity duration-300', showControls() ? 'opacity-0 pointer-events-none' : 'opacity-100')}>
         <div class="tooltip tooltip-left" data-tip="Maximize control bar">
           <button type="button" class="btn btn-square btn-ghost" onClick={() => setShowControls(true)}>
             <PanelBottomOpen />
           </button>
         </div>
       </div>
+
+      {/* Only for games, and kept faint until it is pointed at: somebody
+          playing one should not be looking at a button asking whether it
+          works. It is still the only moment anybody knows the answer. */}
+      <Show when={game()}>
+        <div data-viewer-controls class="fixed bottom-2 left-2 z-40 opacity-30 transition-opacity duration-300 hover:opacity-100">
+          <div class="tooltip tooltip-right" data-tip="Report a problem with this game">
+            <button type="button" class="btn btn-square btn-ghost" onClick={openReport} aria-label="Report a problem with this game">
+              <Flag class="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        <dialog
+          class="modal"
+          ref={
+            // biome-ignore lint: needs to be here for Solid refs
+            reportDialog!
+          }
+        >
+          <div class="modal-box">
+            <h3 class="text-lg font-bold">Is this game working?</h3>
+
+            <Show when={report()} fallback={<p class="pt-1 text-sm text-base-content/50">Nobody has said anything about this one yet.</p>}>
+              {(current) => (
+                <p class="pt-1 text-sm text-base-content/50">
+                  <Show when={verdicts[current().verdict]} fallback={<>Nothing has been reported about this one yet.</>}>
+                    {(verdict) => (
+                      <>
+                        <span class={verdict().tone}>{verdict().label}</span> &middot; {current().flags} {current().flags === 1 ? 'report' : 'reports'}, {current().works} {current().works === 1 ? 'person says' : 'people say'} it works
+                      </>
+                    )}
+                  </Show>
+                </p>
+              )}
+            </Show>
+
+            <div class="flex flex-col gap-2 py-4">
+              <For each={reportKinds}>
+                {(option) => (
+                  <button type="button" class={clsx('rounded-btn px-4 py-3 text-left duration-150', report()?.you === option.kind ? 'bg-primary text-primary-content' : 'bg-base-200 hover:bg-base-300')} onClick={() => say(option.kind)}>
+                    <p class="text-sm font-medium">{option.label}</p>
+                    <p class={clsx('text-xs', report()?.you === option.kind ? 'text-primary-content/70' : 'text-base-content/50')}>{option.detail}</p>
+                  </button>
+                )}
+              </For>
+            </div>
+
+            <p class="text-xs text-base-content/40">
+              One report per person per game, and you can change your mind. Everything said about every game is on the{' '}
+              <A href="/reports" class="link">
+                reports page
+              </A>
+              .
+            </p>
+
+            <div class="modal-action">
+              <Show when={report()?.you}>
+                <button class="btn btn-ghost" type="button" onClick={() => say('none')}>
+                  Take it back
+                </button>
+              </Show>
+              <form method="dialog">
+                <button class="btn w-28" type="submit">
+                  Close
+                </button>
+              </form>
+            </div>
+          </div>
+          <form method="dialog" class="modal-backdrop">
+            <button type="submit">close</button>
+          </form>
+        </dialog>
+      </Show>
     </div>
   )
 }

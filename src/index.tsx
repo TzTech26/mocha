@@ -9,6 +9,7 @@ import FAQ from './routes/faq'
 import Games from './routes/games'
 import Home from './routes/home'
 import Privacy from './routes/privacy'
+import Reports from './routes/reports'
 import ProxyViewer from './routes/route'
 import Settings from './routes/settings'
 import Status from './routes/status'
@@ -109,6 +110,7 @@ render(
       <Route path="/privacy" component={Privacy} />
       <Route path="/settings" component={Settings} />
       <Route path="/status" component={Status} />
+      <Route path="/reports" component={Reports} />
     </Router>
   ),
   root
