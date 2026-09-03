@@ -2,6 +2,7 @@ import { execSync } from 'node:child_process'
 import { defineConfig, normalizePath } from 'vite'
 import solid from 'vite-plugin-solid'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
+import { handleReportsRequest } from './src/server/reports'
 import { handleStatusRequest } from './src/server/status'
 import { routeWisp } from './src/server/wisp'
 
@@ -39,6 +40,7 @@ export default defineConfig({
       name: 'Status API',
       configureServer(server) {
         server.middlewares.use('/api/status', handleStatusRequest)
+        server.middlewares.use('/api/reports', handleReportsRequest)
       }
     },
     {

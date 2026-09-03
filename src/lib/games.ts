@@ -8,6 +8,13 @@ export function gameUrl(game: Pick<GameData, 'id' | 'file'>) {
   return `/cdn/${game.id}/${game.file}`
 }
 
+// The other direction, and the reason the shape above is worth having in one
+// place: the viewer is handed an address and has to work out whether what it is
+// showing is a game, so it can offer to report one.
+export function gameIdFromTarget(target: string) {
+  return /^\/cdn\/([a-zA-Z0-9._-]+)\//.exec(target)?.[1] ?? null
+}
+
 export function gameImage(game: Pick<GameData, 'id' | 'image'>) {
   return `/cdn/${game.id}/${game.image}`
 }

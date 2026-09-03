@@ -106,6 +106,53 @@ export interface StatusData {
   startedAt: number
 }
 
+// What one person can say about one game, and 'none' for taking it back.
+export type ReportKind = 'broken' | 'works'
+
+// How the server reads the reports on a game together with how long people
+// stay in it. See src/server/reports.ts for what separates them.
+export type GameVerdict = 'flagged' | 'working' | 'unknown'
+
+export interface ReportNote {
+  text: string
+  at: number
+}
+
+export interface GameReport {
+  id: string
+  verdict: GameVerdict
+  flags: number
+  works: number
+  support: number
+  visits: number
+  long: number
+  typical: number | null
+  notes: ReportNote[]
+  lastReport: number
+  last: number
+  you: ReportKind | null
+}
+
+export interface ReportsData {
+  games: GameReport[]
+  counts: {
+    flagged: number
+    working: number
+    unknown: number
+    tracked: number
+    disputed: number
+    reports: number
+    confirmations: number
+  }
+  rules: {
+    disputeRatio: number
+    provenWeight: number
+    provenSeconds: number
+    voteDays: number
+    maxNote: number
+  }
+}
+
 export interface DebugData {
   enabled: boolean
 }

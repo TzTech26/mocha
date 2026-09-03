@@ -17,6 +17,7 @@ The simplicity and power you expect from a web proxy.
 - [x] Devtools 
 - [x] End-to-end encryption with Epoxy and Libcurl
 - [x] Site compatability alerts and suggestions
+- [x] Game reports, so a broken game is flagged before somebody clicks it
 - [ ] Script injections (Extensions)
 - [ ] Rammerhead
 
@@ -51,6 +52,20 @@ npm run start
 | `STATUS_MAX_GAMES_PER_VISITOR` | `100` | How many games one person's record remembers. Somebody who plays more different games than this starts counting as a new player of the next one. |
 | `STATUS_TOP_GAMES` | `8` | How many games the status page's table lists. The home page asks for five regardless. |
 | `STATUS_SAVE_SECONDS` | `60` | How long to wait after something changes before writing to disk, so a rush of arrivals is one write. |
+| `REPORTS_DATA_FILE` | `.cache/reports.json` | Where game reports and how long people stay in each game are kept - see [How a game gets flagged](#how-a-game-gets-flagged). The other half of the durable state, so it wants the same volume. |
+| `REPORTS_PERSIST` | enabled | Set to `0` to keep reports in memory, so they start from nothing on every restart. |
+| `REPORTS_SAVE_SECONDS` | `60` | How long to wait after a report before writing to disk. |
+| `REPORTS_DISPUTE_RATIO` | `2` | How many people saying a game works it takes to answer one report of it. |
+| `REPORTS_PROVEN_SECONDS` | `300` | A visit this long is a game that demonstrably ran, and counts for it the way somebody saying it works does. There is deliberately no setting for the other direction: a short visit is counted as nothing. |
+| `REPORTS_PROVEN_WEIGHT` | `3` | How many long visits are allowed to stand in for people agreeing. Capped so a game that broke this morning cannot be defended forever by the visits it held before. |
+| `REPORTS_VOTE_DAYS` | `30` | How long a report counts for. Games get fixed without anybody telling us, so they expire rather than pinning a game forever. |
+| `REPORTS_MAX_NOTE` | `200` | Longest line of text a report can carry. |
+| `REPORTS_SHOWN_NOTES` | `4` | How many of a game's reports are quoted on the page, newest first. |
+| `REPORTS_SESSION_SECONDS` | `90` | How long since a tab's last ping before its visit is treated as over. Keep it in step with `STATUS_ACTIVE_SECONDS`. |
+| `REPORTS_MAX_GAMES` | `2000` | Ceiling on how many games have reports tracked, so made up names cannot grow it without bound. |
+| `REPORTS_MAX_VOTERS_PER_GAME` | `500` | Ceiling on how many people's reports one game remembers. |
+| `REPORTS_MAX_SESSIONS` | `50000` | Ceiling on visits being measured at once, for the same reason. |
+| `REPORTS_MAX_LISTED` | `250` | How many games the reports page is handed. Flagged games come first, so this only ever drops ones nobody has said anything about. |
 | `CDN_CACHE_DIR` | `.cache/cdn` | Where fetched assets are cached on disk. |
 | `CDN_CACHE` | enabled | Set to `0` to fetch from the upstream every time. |
 | `EGRESS_PROXIES` | unset | Upstream proxies to route proxied traffic through, comma or newline separated. Unset means connections are made straight from this server. |
@@ -206,23 +221,82 @@ is what makes the percentage real: it is the share of measured time the server
 was answering, kept across restarts along with the totals, how many people came
 back, and what has been played.
 
-**That is the only state Mocha keeps, and it needs a volume.** Without one
-the container's filesystem goes away with the container, so every deploy resets
-the totals to zero and the uptime record starts again - and, because uptime is
+**That, and what people have said about which games work, is the only state
+Mocha keeps, and it needs a volume.** Without one the container's filesystem goes
+away with the container, so every deploy resets the totals to zero, forgets which
+games are broken, and starts the uptime record again - and, because uptime is
 measured from a timestamp that no longer exists, the time the server was down is
 not counted either. Mount a volume on the directory holding `STATUS_DATA_FILE`
-(`/app/.cache` in the image, which also holds `CDN_CACHE_DIR`) and both survive.
+(`/app/.cache` in the image, which also holds `REPORTS_DATA_FILE` and
+`CDN_CACHE_DIR`) and all of it survives.
 On Coolify that is a persistent storage entry with `/app/.cache` as the mount
 path; in Compose it is a named volume on `/app/.cache`.
 
-There are two files, both in that directory. The counts are written when they
+There are three files, all in that directory. The counts are written when they
 change and at most once a minute, so a deploy loses at most the last minute of
 them. Beside them sits a few hundred byte `.uptime` companion holding only the
 uptime record, rewritten every heartbeat: that is what a kill leaves behind to
 measure the outage from, and keeping it separate means an idle server with a
 long history is not rewriting every visitor it has ever seen every 30 seconds.
-Both are written atomically, through a temporary file and a rename, so a read
-that lands mid-write never sees half a file.
+Beside those is `REPORTS_DATA_FILE`, which holds the game reports and the visit
+lengths behind them - see [How a game gets flagged](#how-a-game-gets-flagged).
+All of them are written atomically, through a temporary file and a rename, so a
+read that lands mid-write never sees half a file.
+
+## How a game gets flagged
+
+There are a few hundred games, they are folders on somebody else's CDN, and
+they break without telling anybody. Nothing the server can do finds that out:
+fetching `index.html` says the file is there, not that the game runs, keeps its
+keyboard, or is playable. So `/reports` is built out of the only instrument
+Mocha has, which is the people playing.
+
+**A game is only ever called broken because somebody said so.** The flag on the
+viewer's control bar, next to the home button, gives them a box to say what it
+does, and that is the whole of the reporting half. Nothing here guesses that a
+game is broken.
+
+One report does not take a game down. Anybody who opens it and finds it fine can
+say so, and once `REPORTS_DISPUTE_RATIO` times as many people have, the report is
+answered: the game moves to a list of its own saying exactly that, rather than
+disappearing. What was typed stays there either way, in case the game comes back.
+
+The measured half only ever speaks for a game. The status ping already says which
+game each tab is on, so how long people stay is known without anybody pressing
+anything: a visit past `REPORTS_PROVEN_SECONDS` is a game that ran, and up to
+`REPORTS_PROVEN_WEIGHT` of those count the way people agreeing do. They are
+capped there deliberately, since a game that broke this morning still has every
+long visit it ever held. Leaving quickly counts as nothing at all - people close
+games because they are bored far more often than because they are broken, and
+guessing between the two would flag the wrong games.
+
+That leaves ordering, which is what makes the page usable: the flagged list is
+sorted by how many people reported a game, and games reported by the same
+number of people by how many people play them. The same fault on a game
+everybody opens is worth fixing before one on a game nobody has opened this
+month.
+
+Reports expire after `REPORTS_VOTE_DAYS`, so a game somebody fixed quietly stops
+being flagged without anybody having to notice. They live in
+`REPORTS_DATA_FILE`, written the same way the counts are, and want the same
+volume - without one, every deploy forgets which games are broken.
+
+## Games and the keyboard
+
+Some games load, take the mouse, and ignore every key. That is usually not the
+game being broken: the viewer shows everything in an iframe, and an iframe only hears the keyboard
+while it holds focus. Arriving at a game leaves focus on the page around it, and
+whether a click moves it depends on what is under the pointer, which is why this
+was never all games - one that puts a canvas under the first click takes focus
+from it, one that starts on a splash screen or draws into a frame of its own
+does not.
+
+`src/lib/keyboard.ts` handles both halves. The frame is handed focus when a game
+loads, whenever a click lands anywhere that is not Mocha's own control bar, and
+when the tab is returned to. Any key that still arrives at the page is copied
+into the frame and into the same-origin frames inside it, `keyCode` included,
+since the games this matters most for are old enough to read it. The copy only
+ever happens when the frame did not have focus, so nothing is delivered twice.
 
 ## Support us
 If you like Mocha and would like to support the development, you can donate to me [here](https://buymeacoffee.com/proudparrot2). It helps with server costs, domains, and otherwise financially supports me.
