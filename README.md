@@ -55,14 +55,12 @@ npm run start
 | `REPORTS_DATA_FILE` | `.cache/reports.json` | Where game reports and how long people stay in each game are kept - see [How a game gets flagged](#how-a-game-gets-flagged). The other half of the durable state, so it wants the same volume. |
 | `REPORTS_PERSIST` | enabled | Set to `0` to keep reports in memory, so they start from nothing on every restart. |
 | `REPORTS_SAVE_SECONDS` | `60` | How long to wait after a report before writing to disk. |
-| `REPORTS_CONFIRM_FLAGS` | `2` | How many people have to independently report a game before it is called not working rather than reported. |
-| `REPORTS_DISPUTE_RATIO` | `2` | How much heavier the evidence has to be than the reports against a game before those reports are treated as answered. |
-| `REPORTS_PROVEN_SECONDS` | `300` | A visit this long is a game that demonstrably ran, and counts for the game the way somebody saying it works does. |
+| `REPORTS_DISPUTE_RATIO` | `2` | How many people saying a game works it takes to answer one report of it. |
+| `REPORTS_PROVEN_SECONDS` | `300` | A visit this long is a game that demonstrably ran, and counts for it the way somebody saying it works does. There is deliberately no setting for the other direction: a short visit is counted as nothing. |
 | `REPORTS_PROVEN_WEIGHT` | `3` | How many long visits are allowed to stand in for people agreeing. Capped so a game that broke this morning cannot be defended forever by the visits it held before. |
-| `REPORTS_BOUNCE_SECONDS` | `60` | A visit shorter than this is somebody leaving rather than playing. |
-| `REPORTS_AUTO_SESSIONS` | `8` | How many measured visits a game needs before everybody walking out of it is worth flagging on its own. |
-| `REPORTS_AUTO_BOUNCE` | `0.9` | What share of those visits have to be walk-outs for that to happen. |
 | `REPORTS_VOTE_DAYS` | `30` | How long a report counts for. Games get fixed without anybody telling us, so they expire rather than pinning a game forever. |
+| `REPORTS_MAX_NOTE` | `200` | Longest line of text a report can carry. |
+| `REPORTS_SHOWN_NOTES` | `4` | How many of a game's reports are quoted on the page, newest first. |
 | `REPORTS_SESSION_SECONDS` | `90` | How long since a tab's last ping before its visit is treated as over. Keep it in step with `STATUS_ACTIVE_SECONDS`. |
 | `REPORTS_MAX_GAMES` | `2000` | Ceiling on how many games have reports tracked, so made up names cannot grow it without bound. |
 | `REPORTS_MAX_VOTERS_PER_GAME` | `500` | Ceiling on how many people's reports one game remembers. |
@@ -253,27 +251,30 @@ fetching `index.html` says the file is there, not that the game runs, keeps its
 keyboard, or is playable. So `/reports` is built out of the only instrument
 Mocha has, which is the people playing.
 
-Anyone can flag a game with the flag in the corner of the viewer, and anyone can
-say the same game works for them. **One report is a report, not a verdict.** It
-takes `REPORTS_CONFIRM_FLAGS` people agreeing before a game is called not
-working, and a report is answered when `REPORTS_DISPUTE_RATIO` times as many
-people disagree - so one person flagging a game everybody else is playing moves
-it to a list saying exactly that, rather than taking it down. Reports say what
-is wrong, too: a game that loads and ignores the keyboard is a different problem
-from one that never loads, and the page keeps them apart.
+**A game is only ever called broken because somebody said so.** The flag on the
+viewer's control bar, next to the home button, gives them a box to say what it
+does, and that is the whole of the reporting half. Nothing here guesses that a
+game is broken.
 
-The other half is nobody's opinion. The status ping already says which game each
-tab is on, so how long people stay is measurable, and that is the honest signal:
-a visit past `REPORTS_PROVEN_SECONDS` is a game that ran, and up to
-`REPORTS_PROVEN_WEIGHT` of those stand in for people agreeing. They are capped
-there deliberately - a game that broke this morning still has every long visit it
-ever held, so old evidence can outweigh a report or two and never a crowd of
-them. It works the other way as well: a game `REPORTS_AUTO_SESSIONS` or more
-people have opened and nearly all of them left inside `REPORTS_BOUNCE_SECONDS`
-is flagged with nobody having reported it - which is the case a report system on
-its own always misses, because the people it happens to just leave. Anybody
-saying it works for them settles that, since a person is worth more than a
-pattern.
+One report does not take a game down. Anybody who opens it and finds it fine can
+say so, and once `REPORTS_DISPUTE_RATIO` times as many people have, the report is
+answered: the game moves to a list of its own saying exactly that, rather than
+disappearing. What was typed stays there either way, in case the game comes back.
+
+The measured half only ever speaks for a game. The status ping already says which
+game each tab is on, so how long people stay is known without anybody pressing
+anything: a visit past `REPORTS_PROVEN_SECONDS` is a game that ran, and up to
+`REPORTS_PROVEN_WEIGHT` of those count the way people agreeing do. They are
+capped there deliberately, since a game that broke this morning still has every
+long visit it ever held. Leaving quickly counts as nothing at all - people close
+games because they are bored far more often than because they are broken, and
+guessing between the two would flag the wrong games.
+
+That leaves ordering, which is what makes the page usable: the flagged list is
+sorted by how many people reported a game, and games reported by the same
+number of people by how many people play them. The same fault on a game
+everybody opens is worth fixing before one on a game nobody has opened this
+month.
 
 Reports expire after `REPORTS_VOTE_DAYS`, so a game somebody fixed quietly stops
 being flagged without anybody having to notice. They live in

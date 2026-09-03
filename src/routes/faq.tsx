@@ -51,7 +51,7 @@ export default function FAQ() {
         <div class="collapse-content">
           <p>
             A game only hears the keyboard while it holds focus, and some of them never take it. Mocha hands it over when the game loads and again whenever you click, and copies any key that still lands on the page around it into the game, so this should fix itself. If a game is still deaf, report it with the
-            flag in the corner: keyboard problems are counted separately from a game that will not load at all.
+            flag on the control bar and say so in the box - that is the kind of thing nobody else can see from the outside.
           </p>
         </div>
       </div>

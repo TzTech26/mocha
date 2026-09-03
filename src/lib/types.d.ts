@@ -107,26 +107,27 @@ export interface StatusData {
 }
 
 // What one person can say about one game, and 'none' for taking it back.
-export type ReportKind = 'broken' | 'keyboard' | 'other' | 'works'
+export type ReportKind = 'broken' | 'works'
 
-// How the server reads everything said about a game together with how long
-// people actually stay in it. See src/server/reports.ts for what separates
-// them.
-export type GameVerdict = 'broken' | 'keyboard' | 'suspect' | 'reported' | 'working' | 'unknown'
+// How the server reads the reports on a game together with how long people
+// stay in it. See src/server/reports.ts for what separates them.
+export type GameVerdict = 'flagged' | 'working' | 'unknown'
+
+export interface ReportNote {
+  text: string
+  at: number
+}
 
 export interface GameReport {
   id: string
   verdict: GameVerdict
-  broken: number
-  keyboard: number
-  other: number
-  works: number
   flags: number
+  works: number
   support: number
   visits: number
-  short: number
   long: number
   typical: number | null
+  notes: ReportNote[]
   lastReport: number
   last: number
   you: ReportKind | null
@@ -135,24 +136,20 @@ export interface GameReport {
 export interface ReportsData {
   games: GameReport[]
   counts: {
-    broken: number
-    keyboard: number
-    suspect: number
-    reported: number
+    flagged: number
     working: number
     unknown: number
     tracked: number
+    disputed: number
     reports: number
     confirmations: number
   }
   rules: {
-    confirmFlags: number
     disputeRatio: number
     provenWeight: number
-    bounceSeconds: number
     provenSeconds: number
     voteDays: number
-    autoSessions: number
+    maxNote: number
   }
 }
 

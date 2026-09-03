@@ -1,7 +1,7 @@
 import { A, useParams, useSearchParams } from '@solidjs/router'
 import clsx from 'clsx'
 import { Bookmark, ChevronLeft, ChevronRight, CircleAlert, FileCode, Flag, Home, PanelBottomClose, PanelBottomOpen, RotateCw, SquareArrowOutUpRight, TriangleAlert } from 'lucide-solid'
-import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js'
+import { Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js'
 import toast from 'solid-toast'
 import store from 'store2'
 import { openAbWindow } from '../lib/aboutblank'
@@ -10,7 +10,7 @@ import { gameIdFromTarget } from '../lib/games'
 import { focusFrame, watchKeyboard } from '../lib/keyboard'
 import { handlePanicKey } from '../lib/panic'
 import { patches } from '../lib/patch'
-import { fetchGameReport, reportKinds, sendReport, verdicts } from '../lib/reports'
+import { fetchGameReport, noteLimit, sendReport, verdicts } from '../lib/reports'
 import { handleTransport } from '../lib/transport'
 import type { ContentWindow, DevtoolsData, GameReport, ReportKind, TransportData } from '../lib/types'
 import { encodeXor, formatSearch, getFavicon } from '../lib/utils'
@@ -24,6 +24,7 @@ export default function Route() {
   const [showControls, setShowControls] = createSignal(true)
   const [bookmarked, setBookmarked] = createSignal(false)
   const [report, setReport] = createSignal<GameReport | null>(null)
+  const [note, setNote] = createSignal('')
 
   const params = useParams()
   const [searchParams] = useSearchParams()
@@ -54,8 +55,16 @@ export default function Route() {
 
     if (!id) return
 
+    setNote('')
     reportDialog.showModal()
     setReport(await fetchGameReport(id))
+  }
+
+  // Whatever the dialog did, the game should be the one hearing the keyboard
+  // again on the way out of it.
+  function closeReport() {
+    reportDialog.close()
+    focusFrame(ref)
   }
 
   async function say(kind: ReportKind | 'none') {
@@ -63,18 +72,13 @@ export default function Route() {
 
     if (!id) return
 
-    const next = await sendReport(id, kind)
+    const next = await sendReport(id, kind, note())
 
     if (next) setReport(next)
 
-    reportDialog.close()
+    closeReport()
 
-    if (kind === 'keyboard') {
-      // The report is worth having, and so is trying the fix while they are
-      // still sitting in front of the game.
-      focusFrame(ref)
-      toast.success('Reported. The game has been handed the keyboard back - try the keys again.')
-    } else if (kind === 'none') {
+    if (kind === 'none') {
       toast.success('Your report has been taken back.')
     } else if (kind === 'works') {
       toast.success('Noted - that counts against anything reported here.')
@@ -266,6 +270,16 @@ export default function Route() {
           </A>
         </div>
 
+        {/* Only for games. Everything else in here is somebody's own address,
+            which nobody else will ever open and so nobody else can confirm. */}
+        <Show when={game()}>
+          <div class="tooltip" data-tip="This game isn't working">
+            <button class="btn btn-square join-item bg-base-200" type="button" onClick={openReport} aria-label="Report this game">
+              <Flag class="h-5 w-5" />
+            </button>
+          </div>
+        </Show>
+
         {(store('devtools') as DevtoolsData).enabled ? (
           <div class="tooltip" data-tip="Toggle devtools">
             <button
@@ -350,60 +364,44 @@ export default function Route() {
         </div>
       </div>
 
-      {/* Only for games, and kept faint until it is pointed at: somebody
-          playing one should not be looking at a button asking whether it
-          works. It is still the only moment anybody knows the answer. */}
       <Show when={game()}>
-        <div data-viewer-controls class="fixed bottom-2 left-2 z-40 opacity-30 transition-opacity duration-300 hover:opacity-100">
-          <div class="tooltip tooltip-right" data-tip="Report a problem with this game">
-            <button type="button" class="btn btn-square btn-ghost" onClick={openReport} aria-label="Report a problem with this game">
-              <Flag class="h-5 w-5" />
-            </button>
-          </div>
-        </div>
-
         <dialog
           class="modal"
           ref={
             // biome-ignore lint: needs to be here for Solid refs
             reportDialog!
           }
+          onClose={() => focusFrame(ref)}
         >
           <div class="modal-box">
-            <h3 class="text-lg font-bold">Is this game working?</h3>
+            <h3 class="text-lg font-bold">Report this game</h3>
 
-            <Show when={report()} fallback={<p class="pt-1 text-sm text-base-content/50">Nobody has said anything about this one yet.</p>}>
+            <Show when={report()} fallback={<p class="pt-1 text-sm text-base-content/50">Say what it does. Everybody else sees it on the reports page.</p>}>
               {(current) => (
                 <p class="pt-1 text-sm text-base-content/50">
-                  <Show when={verdicts[current().verdict]} fallback={<>Nothing has been reported about this one yet.</>}>
-                    {(verdict) => (
-                      <>
-                        <span class={verdict().tone}>{verdict().label}</span> &middot; {current().flags} {current().flags === 1 ? 'report' : 'reports'}, {current().works} {current().works === 1 ? 'person says' : 'people say'} it works
-                      </>
-                    )}
+                  <Show when={current().flags > 0} fallback={<>Say what it does. Everybody else sees it on the reports page.</>}>
+                    <span class={verdicts[current().verdict]?.tone}>
+                      {current().flags} {current().flags === 1 ? 'person has' : 'people have'} reported this
+                    </span>
+                    , {current().works} {current().works === 1 ? 'says' : 'say'} it works for them.
                   </Show>
                 </p>
               )}
             </Show>
 
-            <div class="flex flex-col gap-2 py-4">
-              <For each={reportKinds}>
-                {(option) => (
-                  <button type="button" class={clsx('rounded-btn px-4 py-3 text-left duration-150', report()?.you === option.kind ? 'bg-primary text-primary-content' : 'bg-base-200 hover:bg-base-300')} onClick={() => say(option.kind)}>
-                    <p class="text-sm font-medium">{option.label}</p>
-                    <p class={clsx('text-xs', report()?.you === option.kind ? 'text-primary-content/70' : 'text-base-content/50')}>{option.detail}</p>
-                  </button>
-                )}
-              </For>
-            </div>
+            <textarea class="textarea textarea-bordered mt-4 h-24 w-full" maxlength={noteLimit} placeholder="What happens when you open it?" value={note()} onInput={(event) => setNote(event.currentTarget.value)} />
 
-            <p class="text-xs text-base-content/40">
-              One report per person per game, and you can change your mind. Everything said about every game is on the{' '}
-              <A href="/reports" class="link">
-                reports page
-              </A>
-              .
-            </p>
+            <div class="flex items-center justify-between pt-1">
+              <p class="text-xs text-base-content/40">
+                One report per person per game, and you can change your mind.{' '}
+                <A href="/reports" class="link" onClick={closeReport}>
+                  Every reported game
+                </A>
+              </p>
+              <p class="text-xs text-base-content/30">
+                {note().length}/{noteLimit}
+              </p>
+            </div>
 
             <div class="modal-action">
               <Show when={report()?.you}>
@@ -411,11 +409,15 @@ export default function Route() {
                   Take it back
                 </button>
               </Show>
-              <form method="dialog">
-                <button class="btn w-28" type="submit">
-                  Close
-                </button>
-              </form>
+              <button class={clsx('btn', report()?.you === 'works' ? 'btn-success' : 'btn-ghost')} type="button" onClick={() => say('works')}>
+                It works for me
+              </button>
+              <button class="btn btn-error" type="button" onClick={() => say('broken')}>
+                Report it
+              </button>
+              <button class="btn" type="button" onClick={closeReport}>
+                Close
+              </button>
             </div>
           </div>
           <form method="dialog" class="modal-backdrop">

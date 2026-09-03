@@ -9,10 +9,6 @@ import type { GameData, GameReport, ReportKind, ReportsData } from '../lib/types
 // that it is not traffic worth mentioning. Same clock as the status page.
 const refreshPeriod = 15000
 
-// Everything anybody would come here for is in these; the rest of what is
-// measured is behind the toggle.
-const flagged = new Set(['broken', 'keyboard', 'suspect', 'reported'])
-
 function Tile(props: { label: string; value: string; note?: string; tone?: string }) {
   return (
     <div class="rounded-box bg-base-200 px-4 py-3">
@@ -39,8 +35,9 @@ export default function Reports() {
   const [games, setGames] = createSignal<Record<string, GameData>>({})
   const [everything, setEverything] = createSignal(false)
   const [loading, setLoading] = createSignal(true)
-  // Rows the reader has just voted on. The next refresh carries them anyway,
-  // but a button that does nothing for fifteen seconds reads as broken.
+  // Rows the reader has just pressed something on. The next refresh carries
+  // them anyway, but a button that does nothing for fifteen seconds reads as
+  // broken.
   const [mine, setMine] = createSignal<Record<string, GameReport>>({})
 
   const navigate = useNavigate()
@@ -76,17 +73,19 @@ export default function Reports() {
     if (next) setMine({ ...mine(), [game]: next })
   }
 
-  // The reader's own vote wins over the last refresh for that one row.
+  // The reader's own answer wins over the last refresh for that one row.
   const rows = createMemo(() => (data()?.games ?? []).map((game) => mine()[game.id] ?? game))
 
-  const problems = createMemo(() => rows().filter((game) => flagged.has(game.verdict)))
+  // Already in the order the server put them in: most reports first, and how
+  // many people play the game deciding between games with the same number.
+  const problems = createMemo(() => rows().filter((game) => game.verdict === 'flagged'))
 
   // The case this page exists to handle: somebody flagged it, everybody else
   // is playing it. Worth showing rather than hiding, so the person who flagged
   // it can see what happened to their report.
-  const disputed = createMemo(() => rows().filter((game) => game.verdict === 'working' && game.flags > 0))
+  const answered = createMemo(() => rows().filter((game) => game.verdict !== 'flagged' && game.flags > 0))
 
-  const rest = createMemo(() => rows().filter((game) => !flagged.has(game.verdict) && game.flags === 0))
+  const rest = createMemo(() => rows().filter((game) => game.flags === 0))
 
   function name(id: string) {
     return games()[id]?.name ?? id
@@ -99,22 +98,26 @@ export default function Reports() {
     return (
       <tr>
         <td>
-          <div class="flex items-center gap-3">
-            <Show when={data()}>{(game) => <img src={gameImage(game())} alt="" class="h-8 w-12 rounded bg-base-300 object-cover" />}</Show>
-            <div>
+          <div class="flex items-start gap-3">
+            <Show when={data()}>{(game) => <img src={gameImage(game())} alt="" class="mt-0.5 h-8 w-12 rounded bg-base-300 object-cover" />}</Show>
+            <div class="flex flex-col gap-1">
               <p class="font-medium">{name(props.game.id)}</p>
               <Show when={verdict()}>{(current) => <p class={clsx('text-xs', current().tone)}>{current().detail}</p>}</Show>
+              {/* What people actually typed, which is the only thing here that
+                  says what is wrong rather than that something is. */}
+              <For each={props.game.notes}>
+                {(note) => (
+                  <p class="max-w-md text-xs italic text-base-content/60">
+                    &ldquo;{note.text}&rdquo; <span class="not-italic text-base-content/30">{formatWhen(note.at)}</span>
+                  </p>
+                )}
+              </For>
             </div>
           </div>
         </td>
-        <td class="text-right tabular-nums">
-          {props.game.flags.toLocaleString()}
-          <Show when={props.game.keyboard > 0}>
-            <span class="block text-xs text-base-content/40">{props.game.keyboard} keyboard</span>
-          </Show>
-        </td>
-        <td class="text-right tabular-nums">{props.game.works.toLocaleString()}</td>
-        <td class="text-right tabular-nums">
+        <td class="text-right align-top tabular-nums">{props.game.flags.toLocaleString()}</td>
+        <td class="text-right align-top tabular-nums">{props.game.works.toLocaleString()}</td>
+        <td class="text-right align-top tabular-nums">
           {formatPlaytime(props.game.typical)}
           <Show when={props.game.visits > 0}>
             <span class="block text-xs text-base-content/40">
@@ -122,8 +125,8 @@ export default function Reports() {
             </span>
           </Show>
         </td>
-        <td class="text-right text-xs text-base-content/40">{props.game.lastReport ? formatWhen(props.game.lastReport) : '—'}</td>
-        <td>
+        <td class="text-right align-top text-xs text-base-content/40">{props.game.lastReport ? formatWhen(props.game.lastReport) : '—'}</td>
+        <td class="align-top">
           <div class="flex justify-end gap-1">
             <Show when={data()}>
               {(game) => (
@@ -135,7 +138,7 @@ export default function Reports() {
             <button type="button" class={clsx('btn btn-xs', props.game.you === 'works' ? 'btn-success' : 'btn-ghost')} onClick={() => say(props.game.id, props.game.you === 'works' ? 'none' : 'works')}>
               Works
             </button>
-            <button type="button" class={clsx('btn btn-xs', props.game.you && props.game.you !== 'works' ? 'btn-error' : 'btn-ghost')} onClick={() => say(props.game.id, props.game.you && props.game.you !== 'works' ? 'none' : 'broken')}>
+            <button type="button" class={clsx('btn btn-xs', props.game.you === 'broken' ? 'btn-error' : 'btn-ghost')} onClick={() => say(props.game.id, props.game.you === 'broken' ? 'none' : 'broken')}>
               Broken
             </button>
           </div>
@@ -170,7 +173,7 @@ export default function Reports() {
     <div class="mx-auto flex w-full max-w-4xl flex-col items-center gap-8 p-8 pb-16">
       <div class="flex flex-col items-center gap-2 text-center">
         <h1 class="text-4xl font-bold">Game reports</h1>
-        <p class="max-w-xl text-sm text-base-content/60">Games are hosted somewhere else and break without telling anybody. Anyone can flag one from the flag in the corner while playing it, and anyone can disagree. This is what everybody has said.</p>
+        <p class="max-w-xl text-sm text-base-content/60">Games are hosted somewhere else and break without telling anybody. Open one, press the flag on the control bar, and say what it does. This is what everybody has reported.</p>
       </div>
 
       <Show when={!loading()} fallback={<span class="loading loading-dots loading-lg" />}>
@@ -179,49 +182,51 @@ export default function Reports() {
             <>
               <Section title="Where things stand">
                 <div class="grid w-full grid-cols-2 gap-3 sm:grid-cols-4">
-                  <Tile label="Not working" value={current().counts.broken.toLocaleString()} note="Agreed by more than one person" tone={current().counts.broken > 0 ? 'text-error' : undefined} />
-                  <Tile label="Keyboard" value={current().counts.keyboard.toLocaleString()} note="Loads, but the keys do nothing" tone={current().counts.keyboard > 0 ? 'text-warning' : undefined} />
-                  <Tile label="Unconfirmed" value={(current().counts.reported + current().counts.suspect).toLocaleString()} note="Reported once, or everybody leaves" />
-                  <Tile label="Working" value={current().counts.working.toLocaleString()} note="People are playing them" tone="text-success" />
+                  <Tile label="Flagged" value={current().counts.flagged.toLocaleString()} note="Reported and not answered" tone={current().counts.flagged > 0 ? 'text-error' : undefined} />
+                  <Tile label="Reports" value={current().counts.reports.toLocaleString()} note="From everybody, all games" />
+                  <Tile label="Answered" value={current().counts.disputed.toLocaleString()} note="Reported, but people play them" />
+                  <Tile label="Working" value={current().counts.working.toLocaleString()} note="Nothing outstanding against them" tone="text-success" />
                 </div>
               </Section>
 
               <Section title="Flagged">
+                <p class="-mt-1 text-xs text-base-content/40">Most reported first. Two games with the same number of reports are ordered by how many people play them, since the same fault on a game everybody opens is worth fixing first.</p>
                 <Show when={problems().length > 0} fallback={<p class="rounded-box bg-base-200 p-6 text-center text-sm text-base-content/40">Nothing is flagged right now</p>}>
                   <Table games={problems()} />
                 </Show>
               </Section>
 
-              <Show when={disputed().length > 0}>
+              <Show when={answered().length > 0}>
                 <Section title="Reported, but working for others">
                   <p class="-mt-1 text-xs text-base-content/40">Somebody flagged these and enough people have played them since that the report is outweighed. If one of them is broken for you too, say so and it moves up.</p>
-                  <Table games={disputed()} />
+                  <Table games={answered()} />
                 </Section>
               </Show>
 
-              <Section title="Everything else">
-                <label class="flex cursor-pointer items-center gap-2 text-sm text-base-content/60">
-                  <input type="checkbox" class="checkbox checkbox-sm" checked={everything()} onChange={(event) => setEverything(event.currentTarget.checked)} />
-                  Show the {rest().length.toLocaleString()} {rest().length === 1 ? 'game' : 'games'} nobody has reported
-                </label>
-                <Show when={everything() && rest().length > 0}>
-                  <Table games={rest()} />
-                </Show>
-              </Section>
+              <Show when={rest().length > 0}>
+                <Section title="Everything else">
+                  <label class="flex cursor-pointer items-center gap-2 text-sm text-base-content/60">
+                    <input type="checkbox" class="checkbox checkbox-sm" checked={everything()} onChange={(event) => setEverything(event.currentTarget.checked)} />
+                    Show the {rest().length.toLocaleString()} {rest().length === 1 ? 'game' : 'games'} nobody has reported
+                  </label>
+                  <Show when={everything()}>
+                    <Table games={rest()} />
+                  </Show>
+                </Section>
+              </Show>
 
-              <Section title="How a game gets flagged">
+              <Section title="How this works">
                 <div class="flex w-full flex-col gap-2 rounded-box bg-base-200 px-5 py-4 text-sm text-base-content/60">
                   <p>
-                    <span class="font-semibold text-base-content">One report is a report, not a verdict.</span> It takes {current().rules.confirmFlags} people agreeing before a game is called not working, and a report is answered when {current().rules.disputeRatio} times as many people say it works. Saying so
-                    yourself is the fastest way to clear a game somebody flagged by mistake.
+                    <span class="font-semibold text-base-content">A game is only called broken because somebody said so.</span> Nothing here guesses. The flag sits on the viewer's control bar next to the home button, it gives you a box to say what happens, and that is the whole of it.
                   </p>
                   <p>
-                    <span class="font-semibold text-base-content">Staying counts as saying it works.</span> Nobody has to press anything: a visit that runs past {Math.round(current().rules.provenSeconds / 60)} minutes is a game that demonstrably ran, and up to {current().rules.provenWeight} of those stand in
-                    for people agreeing. They are capped there on purpose - a game that broke this morning still has every long visit it ever held.
+                    <span class="font-semibold text-base-content">One report does not take a game down.</span> Anybody who opens it and finds it fine can say so, and once {current().rules.disputeRatio} times as many people have, the report is answered and the game moves to the list below the flagged one.
+                    Nothing is deleted - the report is still there, with what they said, in case it comes back.
                   </p>
                   <p>
-                    <span class="font-semibold text-base-content">Walking straight back out counts too.</span> A game that {current().rules.autoSessions} or more people have opened and nearly all of them left inside {current().rules.bounceSeconds} seconds is flagged without anybody reporting it, until
-                    somebody says otherwise. That is the case reports alone always miss: people who cannot play something usually just leave rather than say so.
+                    <span class="font-semibold text-base-content">Staying counts as saying it works.</span> Nobody has to press anything: a visit that runs past {Math.round(current().rules.provenSeconds / 60)} minutes is a game that demonstrably ran, and up to {current().rules.provenWeight} of those count the
+                    way people agreeing do. Leaving quickly counts as nothing at all - people close games because they are bored far more often than because they are broken.
                   </p>
                   <p>Reports are forgotten after {current().rules.voteDays} days, so a game that was fixed quietly does not stay flagged forever.</p>
                 </div>
@@ -232,7 +237,7 @@ export default function Reports() {
       </Show>
 
       <p class="max-w-xl text-center text-xs text-base-content/40">
-        Reports are signed with the random id your browser keeps for itself, which is what makes it one report per person per game. Nothing else about you is stored. The rest of the numbers are on the{' '}
+        Reports are signed with the random id your browser keeps for itself, which is what makes it one report per person per game. Nothing else about you is stored, and what you type here is public. The rest of the numbers are on the{' '}
         <A href="/status" class="link">
           status page
         </A>

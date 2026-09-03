@@ -4,21 +4,25 @@
 // an iframe. There are a few hundred of them and no way to test one from the
 // server: fetching index.html says the file is there, not that the game runs,
 // keeps its keyboard, or is playable at all. The only instrument Mocha has is
-// the people playing, so this counts two things they say.
+// the people playing, so this listens to them two ways.
 //
-// The first is a report. Anyone can flag a game as broken from the viewer or
-// from the reports page, and anyone can say the same game works for them. One
-// report is a report, not a verdict: a game somebody flagged that everybody
-// else is playing fine is a disagreement, and the page says so rather than
-// hiding the game. It takes agreement to call a game broken, and enough
-// disagreement to clear it again.
+// A game is only ever called broken by somebody flagging it. That is the whole
+// of the reporting half: the flag in the viewer's control bar, a line of text
+// saying what is wrong, and it is on the reports page. Anybody who disagrees
+// says it works for them, and enough of them answers the report - one person
+// flagging a game everybody else is playing does not take it down.
 //
-// The second is nobody's opinion at all. The status ping already says which
-// game each tab is on, so how long people stay is measurable, and it is the
-// honest signal: a game that holds somebody for five minutes ran. A game that
-// everybody walks out of inside a minute, over and over, is worth flagging
-// before anyone has said a word about it - which is the case a report system
-// on its own always misses, because the people it happens to leave.
+// The other half only ever speaks for a game, never against one. The status
+// ping already says which game each tab is on, so how long people stay is
+// measurable, and a visit that runs long is a game that demonstrably ran. A
+// short visit is not the reverse of that and is counted as nothing: people
+// leave games because they are bored far more often than because they are
+// broken, and guessing between the two would flag the wrong games.
+//
+// What is left is an ordering problem, because a list of flagged games is only
+// useful if the ones worth fixing are at the top. Reports are what sort it, and
+// between games with the same number of them, how many people the game happens
+// to: the same fault on one everybody opens comes first.
 //
 // Reports outlive the process, so they are written beside the status counts
 // with the same discipline: a temporary file and a rename, so a read landing
@@ -43,28 +47,31 @@ const maxGames = Number(process.env.REPORTS_MAX_GAMES ?? 2000)
 const maxVoters = Number(process.env.REPORTS_MAX_VOTERS_PER_GAME ?? 500)
 const maxSessions = Number(process.env.REPORTS_MAX_SESSIONS ?? 50000)
 
+// What somebody types about a game, which everybody else then reads. Long
+// enough to say what is wrong with it, short enough that nobody is writing
+// anything else in there.
+const maxNote = Number(process.env.REPORTS_MAX_NOTE ?? 200)
+
+// How many of those the page is shown per game. The newest are the ones that
+// describe the game as it is now.
+const shownNotes = Number(process.env.REPORTS_SHOWN_NOTES ?? 4)
+
 // A report is about a game as it was that week. Games are hosted somewhere
 // else and get fixed without anybody telling us, so a report stops counting
 // after this and a game nobody has complained about lately goes back to being
 // unreported rather than staying flagged forever.
 const voteDays = Number(process.env.REPORTS_VOTE_DAYS ?? 30)
 
-// A visit shorter than this is somebody leaving, and one longer than the
-// second is a game that demonstrably ran. Between the two is the ordinary
-// case that says nothing either way.
-const bounceWindow = Number(process.env.REPORTS_BOUNCE_SECONDS ?? 60) * 1000
+// A visit this long is a game that ran. There is deliberately no number for
+// the other direction: a short visit says nothing about the game.
 const provenWindow = Number(process.env.REPORTS_PROVEN_SECONDS ?? 300) * 1000
 
 // Browsers ping every 30 seconds, so a tab silent for this long has gone and
 // its visit can be measured. Kept in step with STATUS_ACTIVE_SECONDS.
 const sessionWindow = Number(process.env.REPORTS_SESSION_SECONDS ?? 90) * 1000
 
-// How many people have to independently report a game before it is called
-// broken rather than reported.
-const confirmFlags = Number(process.env.REPORTS_CONFIRM_FLAGS ?? 2)
-
 // How much heavier the evidence for a game has to be than the reports against
-// it before a report is treated as answered. Two people saying it works
+// it before those reports are treated as answered. Two people saying it works
 // against one saying it does not is the case this exists for.
 const disputeRatio = Number(process.env.REPORTS_DISPUTE_RATIO ?? 2)
 
@@ -73,12 +80,8 @@ const disputeRatio = Number(process.env.REPORTS_DISPUTE_RATIO ?? 2)
 // report or two and never a crowd of them.
 const provenWeight = Number(process.env.REPORTS_PROVEN_WEIGHT ?? 3)
 
-// Before this many measured visits, everybody walking out means nothing.
-const autoSessions = Number(process.env.REPORTS_AUTO_SESSIONS ?? 8)
-const autoBounceRate = Number(process.env.REPORTS_AUTO_BOUNCE ?? 0.9)
-
-// How many games the reports page is handed. Everything flagged comes first,
-// so the cap only ever drops games nobody has said anything about.
+// How many games the reports page is handed. Flagged games come first, so the
+// cap only ever drops ones nobody has said anything about.
 const maxListed = Number(process.env.REPORTS_MAX_LISTED ?? 250)
 
 const day = 86400000
@@ -88,31 +91,36 @@ const day = 86400000
 const idPattern = /^[a-zA-Z0-9-]{8,64}$/
 const gamePattern = /^[a-zA-Z0-9._-]{1,64}$/
 
+// Line breaks and control characters in something everybody else is going to
+// read: taken out rather than kept, since all they can do on a list of games
+// is make one report take up the page.
+const noisePattern = /\p{C}+/gu
+
 // What somebody can say about a game. 'works' is the other half of the
 // system: without a way to disagree, one person could flag anything.
-export type Kind = 'broken' | 'keyboard' | 'other' | 'works'
+export type Kind = 'broken' | 'works'
 
-const kinds: Kind[] = ['broken', 'keyboard', 'other', 'works']
+const kinds: Kind[] = ['broken', 'works']
 
-// broken   - enough people agree, and nothing outweighs them
-// keyboard - the same, and what they agree on is that the keys do nothing
-// suspect  - nobody has said anything, but everybody leaves immediately
-// reported - somebody flagged it and there is not yet enough either way
-// working  - reports are outweighed, or there were never any and it holds people
-// unknown  - too little of anything to say
-export type Verdict = 'broken' | 'keyboard' | 'suspect' | 'reported' | 'working' | 'unknown'
+// flagged - somebody says it is broken and nothing outweighs them
+// working - nobody has flagged it, or the flags are outweighed
+// unknown - nothing said, and nobody has stayed long enough to say otherwise
+export type Verdict = 'flagged' | 'working' | 'unknown'
 
 interface Vote {
   kind: Kind
   at: number
+  // What they typed, on a report. Everybody reads it, so it is cleaned on the
+  // way in and capped.
+  note?: string
 }
 
 interface GameRecord {
   votes: Map<string, Vote>
-  // Measured visits, in whole numbers rather than a list of them: what the
-  // verdict asks is how many ran long and how many were walked out of.
+  // Measured visits, in whole numbers rather than a list of them: how many
+  // there have been says how much a report on this game matters, and how many
+  // ran long says the game works.
   visits: number
-  short: number
   long: number
   time: number
   last: number
@@ -140,16 +148,21 @@ function recordFor(game: string) {
 
   if (records.size >= maxGames) return null
 
-  const created: GameRecord = { votes: new Map(), visits: 0, short: 0, long: 0, time: 0, last: 0 }
+  const created: GameRecord = { votes: new Map(), visits: 0, long: 0, time: 0, last: 0 }
   records.set(game, created)
 
   return created
 }
 
+// Somebody's own words, on their way to being shown to everybody else.
+function clean(note: string) {
+  return note.replace(noisePattern, ' ').replace(/\s+/g, ' ').trim().slice(0, maxNote)
+}
+
 function serialize() {
   return JSON.stringify({
-    version: 1,
-    games: [...records].map(([id, entry]) => [id, entry.visits, entry.short, entry.long, entry.time, entry.last, [...entry.votes].map(([visitor, vote]) => [visitor, vote.kind, vote.at])])
+    version: 2,
+    games: [...records].map(([id, entry]) => [id, entry.visits, entry.long, entry.time, entry.last, [...entry.votes].map(([visitor, vote]) => [visitor, vote.kind, vote.at, vote.note ?? ''])])
   })
 }
 
@@ -196,23 +209,30 @@ function load() {
   try {
     const saved = JSON.parse(fs.readFileSync(dataFile, 'utf8'))
 
-    for (const [id, visits, short, long, time, last, votes] of saved?.games ?? []) {
+    for (const row of saved?.games ?? []) {
+      // The first version of this file counted short visits and sorted reports
+      // into kinds. Neither is here any more: a short visit means nothing, and
+      // every kind of problem is now just a report with what they typed.
+      const [id, visits, long, time, last, votes] = saved.version === 2 ? row : [row[0], row[1], row[3], row[4], row[5], row[6]]
+
       if (typeof id !== 'string' || !gamePattern.test(id)) continue
 
       const entry: GameRecord = {
         votes: new Map(),
         visits: Number(visits) || 0,
-        short: Number(short) || 0,
         long: Number(long) || 0,
         time: Number(time) || 0,
         last: Number(last) || 0
       }
 
-      for (const [visitor, kind, at] of votes ?? []) {
+      for (const [visitor, kind, at, note] of votes ?? []) {
         if (typeof visitor !== 'string' || !idPattern.test(visitor)) continue
-        if (!kinds.includes(kind)) continue
 
-        entry.votes.set(visitor, { kind, at: Number(at) || 0 })
+        entry.votes.set(visitor, {
+          kind: kind === 'works' ? 'works' : 'broken',
+          at: Number(at) || 0,
+          note: typeof note === 'string' && note ? clean(note) : undefined
+        })
       }
 
       records.set(id, entry)
@@ -231,8 +251,8 @@ function load() {
 // How it ended is what says when. A tab that pings from somewhere else has just
 // left, so that ping is the end of the visit; a tab that stopped pinging could
 // have gone at any point in the window since, so the last ping we did get is
-// all we know. Both round downwards, which is the safe direction: a visit
-// counted short at worst leaves a working game unproven.
+// all we know. Both round downwards, which only ever costs a game the chance
+// to prove itself.
 function closeSession(session: Session, at: number, left: boolean) {
   const entry = recordFor(session.game)
 
@@ -244,14 +264,13 @@ function closeSession(session: Session, at: number, left: boolean) {
   entry.time += held
   entry.last = Math.max(entry.last, session.last || at)
 
-  if (held < bounceWindow) entry.short++
   if (held >= provenWindow) entry.long++
 
   scheduleSave()
 }
 
 // Called by the status ping for every tab, with the game it is on or nothing
-// when it is not on one. Everything the automatic half of this knows comes
+// when it is not on one. Everything the measured half of this knows comes
 // through here.
 export function notePresence(tab: string, visitor: string, game: string | undefined, at: number) {
   const open = sessions.get(tab)
@@ -293,16 +312,20 @@ function fresh(vote: Vote, at: number) {
   return at - vote.at <= voteDays * day
 }
 
+export interface Note {
+  text: string
+  at: number
+}
+
 interface Counts {
-  broken: number
-  keyboard: number
-  other: number
+  flags: number
   works: number
   lastReport: number
+  notes: Note[]
 }
 
 function count(entry: GameRecord, at: number): Counts {
-  const counts: Counts = { broken: 0, keyboard: 0, other: 0, works: 0, lastReport: 0 }
+  const counts: Counts = { flags: 0, works: 0, lastReport: 0, notes: [] }
 
   for (const [visitor, vote] of entry.votes) {
     // Counting is also when expired reports are forgotten, so a game nobody
@@ -313,60 +336,53 @@ function count(entry: GameRecord, at: number): Counts {
       continue
     }
 
-    counts[vote.kind]++
+    if (vote.kind === 'works') {
+      counts.works++
+      continue
+    }
 
-    if (vote.kind !== 'works' && vote.at > counts.lastReport) counts.lastReport = vote.at
+    counts.flags++
+
+    if (vote.at > counts.lastReport) counts.lastReport = vote.at
+    if (vote.note) counts.notes.push({ text: vote.note, at: vote.at })
   }
+
+  // Newest first, and only a few of them: the page is a list of games, not a
+  // thread about each one.
+  counts.notes.sort((a, b) => b.at - a.at)
+  counts.notes.length = Math.min(counts.notes.length, shownNotes)
 
   return counts
 }
 
+function supportFor(entry: GameRecord, counts: Counts) {
+  return counts.works + Math.min(entry.long, provenWeight)
+}
+
 function verdictFor(entry: GameRecord, counts: Counts): Verdict {
-  const flags = counts.broken + counts.keyboard + counts.other
-  const support = counts.works + Math.min(entry.long, provenWeight)
+  const support = supportFor(entry, counts)
 
-  if (flags === 0) {
-    // Somebody saying it works, or having stayed long enough to have proved it,
-    // is worth more than a pattern - so it is asked first.
-    if (support > 0) return 'working'
-
-    // With nothing said either way, the only thing left is whether people stay.
-    // Everybody leaving inside a minute, enough times over, is the complaint
-    // nobody filed.
-    if (entry.visits >= autoSessions && entry.short / entry.visits >= autoBounceRate) return 'suspect'
-
-    return 'unknown'
-  }
+  if (counts.flags === 0) return support > 0 ? 'working' : 'unknown'
 
   // The case this whole thing is built around: one person says it is broken,
   // everybody else is playing it. That is not a broken game.
-  if (support >= flags * disputeRatio) return 'working'
+  if (support >= counts.flags * disputeRatio) return 'working'
 
-  if (flags >= confirmFlags && flags > support) {
-    // What they agree on matters: a game that loads and ignores the keyboard
-    // is a different problem from one that never loads, and the fix is not
-    // the same either.
-    return counts.keyboard > counts.broken + counts.other ? 'keyboard' : 'broken'
-  }
-
-  return 'reported'
+  return 'flagged'
 }
 
 export interface Report {
   id: string
   verdict: Verdict
-  broken: number
-  keyboard: number
-  other: number
-  works: number
   flags: number
+  works: number
   support: number
   visits: number
-  short: number
   long: number
-  // Average measured visit. Zero visits is null rather than 0, so "nobody has
-  // played it" reads differently from "everybody left at once".
+  // Average measured visit. No visits is null rather than 0, so "nobody has
+  // played it" reads differently from "everybody was in and out".
   typical: number | null
+  notes: Note[]
   lastReport: number
   last: number
   you: Kind | null
@@ -379,30 +395,29 @@ function report(id: string, entry: GameRecord, at: number, visitor?: string): Re
   return {
     id,
     verdict: verdictFor(entry, counts),
-    broken: counts.broken,
-    keyboard: counts.keyboard,
-    other: counts.other,
+    flags: counts.flags,
     works: counts.works,
-    flags: counts.broken + counts.keyboard + counts.other,
-    support: counts.works + Math.min(entry.long, provenWeight),
+    support: supportFor(entry, counts),
     visits: entry.visits,
-    short: entry.short,
     long: entry.long,
     typical: entry.visits > 0 ? Math.round(entry.time / entry.visits) : null,
+    notes: counts.notes,
     lastReport: counts.lastReport,
     last: entry.last,
     you: you && fresh(you, at) ? you.kind : null
   }
 }
 
-// Worst first, so the page's first screen is the games somebody would want to
-// know about before clicking one.
-const severity: Record<Verdict, number> = { broken: 0, keyboard: 1, reported: 2, suspect: 3, working: 4, unknown: 5 }
+const severity: Record<Verdict, number> = { flagged: 0, working: 1, unknown: 2 }
 
 function snapshot(at: number, visitor?: string) {
-  const games = [...records].map(([id, entry]) => report(id, entry, at, visitor)).sort((a, b) => severity[a.verdict] - severity[b.verdict] || b.flags - a.flags || b.lastReport - a.lastReport || b.visits - a.visits)
+  // Which flagged game is worth looking at first: how many people reported it,
+  // and between games reported by the same number, how many people play it -
+  // the same fault on a game everybody opens is worth fixing before one on a
+  // game nobody has opened this month.
+  const games = [...records].map(([id, entry]) => report(id, entry, at, visitor)).sort((a, b) => severity[a.verdict] - severity[b.verdict] || b.flags - a.flags || b.visits - a.visits || b.lastReport - a.lastReport)
 
-  const counts = { broken: 0, keyboard: 0, suspect: 0, reported: 0, working: 0, unknown: 0 }
+  const counts = { flagged: 0, working: 0, unknown: 0 }
 
   for (const game of games) counts[game.verdict]++
 
@@ -413,24 +428,25 @@ function snapshot(at: number, visitor?: string) {
       // Games with something on file at all, which is what the counts above
       // are a breakdown of.
       tracked: games.length,
+      // Flagged games that everybody else is playing anyway, which the page
+      // keeps apart from the ones nothing answers.
+      disputed: games.filter((game) => game.verdict === 'working' && game.flags > 0).length,
       reports: games.reduce((sum, game) => sum + game.flags, 0),
       confirmations: games.reduce((sum, game) => sum + game.works, 0)
     },
     // The page explains itself out of these rather than repeating numbers that
     // only live in this file's environment variables.
     rules: {
-      confirmFlags,
       disputeRatio,
       provenWeight,
-      bounceSeconds: bounceWindow / 1000,
       provenSeconds: provenWindow / 1000,
       voteDays,
-      autoSessions
+      maxNote
     }
   }
 }
 
-function vote(game: string, visitor: string, kind: Kind | 'none', at: number) {
+function vote(game: string, visitor: string, kind: Kind | 'none', at: number, note?: string) {
   const entry = recordFor(game)
 
   if (!entry) return null
@@ -447,7 +463,9 @@ function vote(game: string, visitor: string, kind: Kind | 'none', at: number) {
   // mind, not agreeing with yourself.
   if (!entry.votes.has(visitor) && entry.votes.size >= maxVoters) return report(game, entry, at, visitor)
 
-  entry.votes.set(visitor, { kind, at })
+  const text = kind === 'broken' && note ? clean(note) : ''
+
+  entry.votes.set(visitor, { kind, at, note: text || undefined })
   scheduleSave()
 
   return report(game, entry, at, visitor)
@@ -490,7 +508,7 @@ export function handleReportsRequest(req: IncomingMessage, res: ServerResponse) 
       return
     }
 
-    const result = vote(game, visitor, kind as Kind | 'none', Date.now())
+    const result = vote(game, visitor, kind as Kind | 'none', Date.now(), url.searchParams.get('note') ?? undefined)
 
     if (!result) {
       // The ceiling on how many games are tracked, which only a flood of made
