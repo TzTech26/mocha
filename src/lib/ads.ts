@@ -10,23 +10,31 @@ export const adPlacements = ['games', 'shortcuts', 'bookmarks', 'faq', 'legal', 
 export type AdPlacement = (typeof adPlacements)[number]
 
 // --- Per placement units ---
-// Banner-style units that render into a container on one specific page. Create
-// a "Native Banner" unit per placement in the Adsterra dashboard: it gives you
-// a snippet with a container <div id="..."> and a loader <script src="...">,
-// and those two values go here verbatim.
+// Banner-style units that render into a container on the page. The values come
+// from an Adsterra ad unit's snippet: the id of its container <div> and the src
+// of its loader <script>, both verbatim.
 //
 // A null placement renders nothing at all, so the site never shows an empty ad
-// box for a unit that has not been created yet. All of them are null today -
-// the site wide formats below are doing the earning.
+// box for a unit that has not been created yet.
 export type AdUnit = { containerId: string; scriptSrc: string }
 
+// Adsterra NativeBanner_1, unit 31134849. One unit is reused across every
+// placement, which is fine because only one route is mounted at a time, so two
+// containers with this id are never in the page at once. Splitting it into a
+// unit per page would only be worth doing to see the pages reported separately
+// in Adsterra's stats.
+const nativeBanner: AdUnit = {
+  containerId: 'container-de573f947e06bb50827ceb6741737305',
+  scriptSrc: 'https://pl31235348.profitableratecpmnetwork.com/de573f947e06bb50827ceb6741737305/invoke.js'
+}
+
 export const adUnits: Record<AdPlacement, AdUnit | null> = {
-  games: null,
-  shortcuts: null,
-  bookmarks: null,
-  faq: null,
-  legal: null,
-  about: null
+  games: nativeBanner,
+  shortcuts: nativeBanner,
+  bookmarks: nativeBanner,
+  faq: nativeBanner,
+  legal: nativeBanner,
+  about: nativeBanner
 }
 
 // --- Site wide formats ---
