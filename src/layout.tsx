@@ -28,11 +28,15 @@ export default function Layout(props: ParentProps) {
   // too, so it is also the ping that says hello.
   createEffect(() => {
     void pingStatus(location.pathname)
+
+    // Here rather than in onMount so the route is re-read on every navigation.
+    // A gate on the home page would otherwise decide the question once, on the
+    // page somebody happened to land on, and never look again.
+    loadSiteWideAds(location.pathname)
   })
 
   onMount(async () => {
     stopStatusPings = startStatusPings()
-    loadSiteWideAds()
     handleTabCloak()
     handleTheme()
     handleAboutBlank()
