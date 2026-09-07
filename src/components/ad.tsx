@@ -32,8 +32,19 @@ export default function Ad(props: { placement: AdPlacement; when?: boolean; clas
     <Show when={props.when !== false}>
       <Show when={unit()}>
         {(current) => (
-          <div ref={wrapper} class={clsx('flex w-full justify-center px-4 py-4', props.class)}>
-            <div id={current().containerId} class="w-full max-w-3xl" />
+          <div
+            ref={wrapper}
+            class={clsx(
+              'flex w-full justify-center px-4 py-4',
+              // Off to the right on a screen with room beside the content, so
+              // it is never in front of what somebody came for. Narrower than
+              // that there is no room for a column, and it falls back to
+              // sitting at the end of the page.
+              'xl:fixed xl:right-4 xl:top-1/2 xl:z-30 xl:w-72 xl:-translate-y-1/2 xl:px-0',
+              props.class
+            )}
+          >
+            <div id={current().containerId} class="w-full max-w-3xl xl:max-w-none" />
           </div>
         )}
       </Show>

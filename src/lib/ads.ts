@@ -38,22 +38,27 @@ export const adUnits: Record<AdPlacement, AdUnit | null> = {
 }
 
 // --- Site wide formats ---
-// Popunder and multitag are one script for the whole site rather than one per
-// placement, which is why they are here rather than in the Ad component. They
-// pay several times what a banner does on this kind of traffic and take one
-// pasted URL to install.
+// One script for the whole site rather than one per placement, which is why
+// these are here rather than in the Ad component. They pay several times what
+// a banner does, and they are also the formats that take the page over.
 //
-// An entry with an empty src is skipped, so an unused slot costs nothing.
-// `attributes` carries whatever the dashboard's snippet hangs on the tag - a
-// zone ID, usually. Loading is handled by lib/sitewide.ts.
+// Both are off. Run live, they were unusable: the multitag put a full screen
+// "Download is ready" panel over the middle of the home page - a fake download
+// prompt, not something anybody wanted to click on purpose - and between the
+// two of them a window opened on more or less any click, anywhere.
 //
-// These are two separate networks running at once, which is allowed - neither
-// asks for exclusivity. They can both decide to open a window on the same
-// click though, so if visitors start seeing two at a time, set a frequency cap
-// in one of the dashboards rather than removing one outright.
-export type SiteWideAd = { name: string; src: string; attributes?: Record<string, string> }
+// Turning one back on is `enabled: true`, but do it from the dashboard side
+// first, or the same thing happens again:
+//   Monetag  - the multitag picks its own formats. Turn off interstitial and
+//              vignette there and it stops covering the page. Leaving it off
+//              entirely is the safe choice.
+//   Adsterra - the popunder needs a frequency cap, one per visitor per day
+//              rather than per click, before it goes anywhere near live again.
+// Either way, gate it to a route in lib/sitewide.ts rather than the whole
+// site, so the home page stays clean.
+export type SiteWideAd = { name: string; src: string; enabled: boolean; attributes?: Record<string, string> }
 
 export const siteWideAds: SiteWideAd[] = [
-  { name: 'monetag-multitag', src: 'https://quge5.com/88/tag.min.js', attributes: { 'data-zone': '277546' } },
-  { name: 'adsterra-popunder', src: 'https://pl31235347.profitableratecpmnetwork.com/2f/82/b7/2f82b73e8f188696e540dbc36017e72f.js' }
+  { name: 'monetag-multitag', src: 'https://quge5.com/88/tag.min.js', enabled: false, attributes: { 'data-zone': '277546' } },
+  { name: 'adsterra-popunder', src: 'https://pl31235347.profitableratecpmnetwork.com/2f/82/b7/2f82b73e8f188696e540dbc36017e72f.js', enabled: false }
 ]

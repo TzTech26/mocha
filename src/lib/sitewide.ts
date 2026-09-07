@@ -5,19 +5,21 @@ import { siteWideAds } from './ads'
 // change is how one click turns into four popunders.
 let loaded = false
 
-// Loaded on every page including the proxy viewer, so that the formats which
-// render in the top frame - in-page push, interstitials - are there while a
-// game or a proxied search is on screen, which is where the time is actually
-// spent.
+// Nothing is enabled at the moment, so this loads nothing today - see the note
+// in lib/ads.ts for what these did to the page, and what to change in the
+// dashboards before switching one back on.
 //
-// The tradeoff being accepted here: aggressive formats are the fastest way for
-// a domain to be noticed by the filters this site exists to get around. If
-// this ends up costing more traffic than it earns, the fix is a frequency cap
-// in the network dashboard, or excluding `/route/` again here.
-export function loadSiteWideAds() {
-  if (loaded) return
+// The home page is excluded regardless. It is the first thing a visitor sees
+// and the last place to spring a popunder on them, and a script loaded there
+// stays loaded for the rest of the visit anyway, since navigating inside a
+// single page app never reloads the document.
+const excluded = ['/']
 
-  const pending = siteWideAds.filter((ad) => ad.src)
+export function loadSiteWideAds(pathname: string) {
+  if (loaded) return
+  if (excluded.includes(pathname)) return
+
+  const pending = siteWideAds.filter((ad) => ad.enabled && ad.src)
   if (!pending.length) return
 
   loaded = true
