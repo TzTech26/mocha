@@ -57,3 +57,27 @@ export const adsterraUnits: Record<AdPlacement, AdsterraUnit | null> = {
   legal: null,
   about: null
 }
+
+// --- Site wide formats ---
+// Popunder and multitag are one script for the whole site rather than one per
+// placement, which is why they are here rather than in the Ad component. They
+// pay several times what a banner does on this kind of traffic and take one
+// pasted URL to install, so this is the shortest path to actual revenue.
+//
+// An entry with an empty src is skipped, so an unused slot costs nothing and
+// the site works fine with none of them filled in.
+//
+// Where to get each URL:
+//   Monetag  - Dashboard -> Sites -> add site -> Multitag -> copy the script src
+//   Adsterra - Dashboard -> Websites -> add site -> Popunder -> copy the script src
+//
+// Both may be run at once; they are separate companies and neither requires
+// exclusivity. Two popunders will fire two windows though, so if you add a
+// second popunder rather than a multitag, set a frequency cap in at least one
+// dashboard first.
+export type SiteWideAd = { name: string; src: string }
+
+export const siteWideAds: SiteWideAd[] = [
+  { name: 'monetag-multitag', src: '' },
+  { name: 'adsterra-popunder', src: '' }
+]
