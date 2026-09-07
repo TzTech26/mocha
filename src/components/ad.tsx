@@ -12,10 +12,17 @@ declare global {
 // A single ad placement, rendered through whichever network is active in
 // lib/ads.ts. Never render this inside the proxy viewer: neither network
 // allows ads next to third party content we serve.
-export default function Ad(props: { placement: AdPlacement; class?: string }) {
+//
+// Pages whose contents arrive asynchronously, or can legitimately be empty,
+// pass `when` to say the content is actually there. An ad beside a loading
+// spinner or an empty bookmarks list is a screen with no publisher content of
+// its own, which is the specific thing AdSense rejects sites for.
+export default function Ad(props: { placement: AdPlacement; when?: boolean; class?: string }) {
   return (
-    <Show when={activeNetwork === 'adsterra'} fallback={<AdSenseAd placement={props.placement} class={props.class} />}>
-      <AdsterraAd placement={props.placement} class={props.class} />
+    <Show when={props.when !== false}>
+      <Show when={activeNetwork === 'adsterra'} fallback={<AdSenseAd placement={props.placement} class={props.class} />}>
+        <AdsterraAd placement={props.placement} class={props.class} />
+      </Show>
     </Show>
   )
 }

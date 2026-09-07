@@ -30,7 +30,7 @@ export default function Shortcuts() {
         })}
       </div>
 
-      <Ad placement="shortcuts" />
+      <Ad placement="shortcuts" when={data().length > 0} />
     </div>
   )
 }

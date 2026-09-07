@@ -7,6 +7,15 @@
 // content. Adsterra is wired in below as a fallback network that accepts this
 // site category, so a rejection from one does not mean no ad revenue at all.
 // Flip `activeNetwork` once you know which one is actually approved.
+// Switching this also means updating the advertising sections of routes/
+// terms.tsx and routes/privacy.tsx, which name the network and its cookies
+// specifically. A privacy policy describing a network the site is no longer
+// using is its own problem.
+//
+// Keep AdSense Auto ads turned OFF in the dashboard. Auto ads inject units
+// wherever the loader script is present, and the loader lives in index.html
+// for the whole single page app - including /route/:route, which frames
+// proxied third party content. Placements here are explicit for that reason.
 export type AdNetwork = 'adsense' | 'adsterra'
 
 export const activeNetwork: AdNetwork = 'adsense'
