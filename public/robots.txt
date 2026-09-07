@@ -8,3 +8,5 @@ Allow: /
 Disallow: /~/
 Disallow: /route/
 Disallow: /cdn
+
+Sitemap: https://desginmyvan.com/sitemap.xml

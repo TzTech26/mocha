@@ -11,26 +11,29 @@ import { type AdPlacement, adUnits } from '../lib/ads'
 // its own, which is what gets a site thrown out of an ad network.
 export default function Ad(props: { placement: AdPlacement; when?: boolean; class?: string }) {
   const unit = () => adUnits[props.placement]
-  let container: HTMLDivElement | undefined
+  let wrapper: HTMLDivElement | undefined
 
   onMount(() => {
     const current = unit()
-    if (!current || !container) return
+    if (!current || !wrapper) return
 
-    // One loader script per unit, injected next to its own container.
+    // Beside the container rather than inside it, the way the dashboard's
+    // snippet has it. The loader finds the container by id and fills it, so a
+    // script sitting in there is writing into the element it is about to be
+    // replaced by.
     const script = document.createElement('script')
     script.async = true
     script.dataset.cfasync = 'false'
     script.src = current.scriptSrc
-    container.appendChild(script)
+    wrapper.appendChild(script)
   })
 
   return (
     <Show when={props.when !== false}>
       <Show when={unit()}>
         {(current) => (
-          <div class={clsx('flex w-full justify-center px-4 py-4', props.class)}>
-            <div id={current().containerId} ref={container} class="w-full max-w-3xl" />
+          <div ref={wrapper} class={clsx('flex w-full justify-center px-4 py-4', props.class)}>
+            <div id={current().containerId} class="w-full max-w-3xl" />
           </div>
         )}
       </Show>

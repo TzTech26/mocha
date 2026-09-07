@@ -10,23 +10,31 @@ export const adPlacements = ['games', 'shortcuts', 'bookmarks', 'faq', 'legal', 
 export type AdPlacement = (typeof adPlacements)[number]
 
 // --- Per placement units ---
-// Banner-style units that render into a container on one specific page. Create
-// a "Native Banner" unit per placement in the Adsterra dashboard: it gives you
-// a snippet with a container <div id="..."> and a loader <script src="...">,
-// and those two values go here verbatim.
+// Banner-style units that render into a container on the page. The values come
+// from an Adsterra ad unit's snippet: the id of its container <div> and the src
+// of its loader <script>, both verbatim.
 //
 // A null placement renders nothing at all, so the site never shows an empty ad
-// box for a unit that has not been created yet. All of them are null today -
-// the site wide formats below are doing the earning.
+// box for a unit that has not been created yet.
 export type AdUnit = { containerId: string; scriptSrc: string }
 
+// Adsterra NativeBanner_1, unit 31134849. One unit is reused across every
+// placement, which is fine because only one route is mounted at a time, so two
+// containers with this id are never in the page at once. Splitting it into a
+// unit per page would only be worth doing to see the pages reported separately
+// in Adsterra's stats.
+const nativeBanner: AdUnit = {
+  containerId: 'container-de573f947e06bb50827ceb6741737305',
+  scriptSrc: 'https://pl31235348.profitableratecpmnetwork.com/de573f947e06bb50827ceb6741737305/invoke.js'
+}
+
 export const adUnits: Record<AdPlacement, AdUnit | null> = {
-  games: null,
-  shortcuts: null,
-  bookmarks: null,
-  faq: null,
-  legal: null,
-  about: null
+  games: nativeBanner,
+  shortcuts: nativeBanner,
+  bookmarks: nativeBanner,
+  faq: nativeBanner,
+  legal: nativeBanner,
+  about: nativeBanner
 }
 
 // --- Site wide formats ---
@@ -36,11 +44,16 @@ export const adUnits: Record<AdPlacement, AdUnit | null> = {
 // pasted URL to install.
 //
 // An entry with an empty src is skipped, so an unused slot costs nothing.
-// Loading is handled by lib/sitewide.ts, which keeps them off the proxy
-// viewer - see the reasoning there before moving any of this into index.html.
+// `attributes` carries whatever the dashboard's snippet hangs on the tag - a
+// zone ID, usually. Loading is handled by lib/sitewide.ts.
 //
-// Two popunders will fire two windows, so if a second one is added here, set a
-// frequency cap in at least one dashboard first.
-export type SiteWideAd = { name: string; src: string }
+// These are two separate networks running at once, which is allowed - neither
+// asks for exclusivity. They can both decide to open a window on the same
+// click though, so if visitors start seeing two at a time, set a frequency cap
+// in one of the dashboards rather than removing one outright.
+export type SiteWideAd = { name: string; src: string; attributes?: Record<string, string> }
 
-export const siteWideAds: SiteWideAd[] = [{ name: 'monetag-popunder', src: 'https://pl31235347.profitableratecpmnetwork.com/2f/82/b7/2f82b73e8f188696e540dbc36017e72f.js' }]
+export const siteWideAds: SiteWideAd[] = [
+  { name: 'monetag-multitag', src: 'https://quge5.com/88/tag.min.js', attributes: { 'data-zone': '277546' } },
+  { name: 'adsterra-popunder', src: 'https://pl31235347.profitableratecpmnetwork.com/2f/82/b7/2f82b73e8f188696e540dbc36017e72f.js' }
+]

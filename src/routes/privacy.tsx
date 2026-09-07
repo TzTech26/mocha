@@ -39,15 +39,19 @@ export default function Privacy() {
 
       <section class="flex flex-col gap-2">
         <h2 class="text-2xl font-semibold">Advertising and cookies</h2>
-        <p>Mocha shows ads served by Monetag. Some of them open in a separate window or tab rather than appearing inside the page.</p>
+        <p>Mocha shows ads served by two advertising networks, Monetag and Adsterra. Some of their formats open in a separate window or tab, or appear over the page, rather than sitting inside it. They run on every part of the site, including while a game or a proxied page is open.</p>
         <ul class="list-disc pl-6">
-          <li>Monetag and the advertisers buying through it are third parties, and they set their own cookies and similar identifiers when an ad is served.</li>
+          <li>Both networks, and the advertisers buying through them, are third parties, and they set their own cookies and similar identifiers when an ad is served.</li>
           <li>Those identifiers are used to decide which ads to show you, to limit how often you see the same one, and to measure whether an ad was clicked. They are not set or read by us, and we do not receive them.</li>
-          <li>Ads are not served inside the proxy viewer, so nothing an advertiser sets is placed alongside a page you are browsing through Mocha.</li>
+          <li>Ads are shown by Mocha itself, around the proxy rather than inside it. Nothing is injected into the pages you open through the proxy, and the ad networks are not told which sites those are.</li>
           <li>
-            How Monetag handles this data is described in its{' '}
+            How each network handles this data is described in the{' '}
             <a class="link" href="https://monetag.com/privacy-policy/" rel="noreferrer" target="_blank">
-              privacy policy
+              Monetag privacy policy
+            </a>{' '}
+            and the{' '}
+            <a class="link" href="https://adsterra.com/privacy-policy/" rel="noreferrer" target="_blank">
+              Adsterra privacy policy
             </a>
             .
           </li>

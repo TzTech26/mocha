@@ -5,14 +5,17 @@ import { siteWideAds } from './ads'
 // change is how one click turns into four popunders.
 let loaded = false
 
-// Never loaded on the proxy viewer. A popunder that fires while somebody is
-// mid-browse is both the worst possible moment for it and the fastest way for
-// this domain to end up on a filter list, which for an unblocker is the one
-// failure it cannot come back from. Navigating out of the viewer to any
-// ordinary page loads them then.
-export function loadSiteWideAds(pathname: string) {
+// Loaded on every page including the proxy viewer, so that the formats which
+// render in the top frame - in-page push, interstitials - are there while a
+// game or a proxied search is on screen, which is where the time is actually
+// spent.
+//
+// The tradeoff being accepted here: aggressive formats are the fastest way for
+// a domain to be noticed by the filters this site exists to get around. If
+// this ends up costing more traffic than it earns, the fix is a frequency cap
+// in the network dashboard, or excluding `/route/` again here.
+export function loadSiteWideAds() {
   if (loaded) return
-  if (pathname.includes('/route/')) return
 
   const pending = siteWideAds.filter((ad) => ad.src)
   if (!pending.length) return
@@ -24,6 +27,14 @@ export function loadSiteWideAds(pathname: string) {
     script.async = true
     script.dataset.cfasync = 'false'
     script.dataset.ad = ad.name
+
+    // Zone IDs and the like ride on the tag as attributes, and a script reads
+    // its own attributes when it runs, so they have to be set before the
+    // append below is what starts it.
+    for (const [name, value] of Object.entries(ad.attributes ?? {})) {
+      script.setAttribute(name, value)
+    }
+
     script.src = ad.src
     document.head.appendChild(script)
   }

@@ -36,7 +36,7 @@ export default function Terms() {
 
       <section class="flex flex-col gap-2">
         <h2 class="text-2xl font-semibold">Advertising</h2>
-        <p>Mocha is supported by ads served through Monetag. Some of those ads open in a separate window or tab. Interfering with how they are served, including clicking them artificially or blocking them programmatically for others, is not permitted.</p>
+        <p>Mocha is supported by ads served through Monetag and Adsterra. Some of those ads open in a separate window or tab, or appear over the page. Interfering with how they are served, including clicking them artificially or blocking them programmatically for others, is not permitted.</p>
       </section>
 
       <section class="flex flex-col gap-2">
