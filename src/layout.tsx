@@ -28,15 +28,11 @@ export default function Layout(props: ParentProps) {
   // too, so it is also the ping that says hello.
   createEffect(() => {
     void pingStatus(location.pathname)
-
-    // Same effect because it asks the same question of the same value: this
-    // runs on first render and on every navigation, and the loader decides
-    // whether the page it landed on is one ads belong on.
-    loadSiteWideAds(location.pathname)
   })
 
   onMount(async () => {
     stopStatusPings = startStatusPings()
+    loadSiteWideAds()
     handleTabCloak()
     handleTheme()
     handleAboutBlank()

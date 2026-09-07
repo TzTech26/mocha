@@ -36,11 +36,16 @@ export const adUnits: Record<AdPlacement, AdUnit | null> = {
 // pasted URL to install.
 //
 // An entry with an empty src is skipped, so an unused slot costs nothing.
-// Loading is handled by lib/sitewide.ts, which keeps them off the proxy
-// viewer - see the reasoning there before moving any of this into index.html.
+// `attributes` carries whatever the dashboard's snippet hangs on the tag - a
+// zone ID, usually. Loading is handled by lib/sitewide.ts.
 //
-// Two popunders will fire two windows, so if a second one is added here, set a
-// frequency cap in at least one dashboard first.
-export type SiteWideAd = { name: string; src: string }
+// These are two separate networks running at once, which is allowed - neither
+// asks for exclusivity. They can both decide to open a window on the same
+// click though, so if visitors start seeing two at a time, set a frequency cap
+// in one of the dashboards rather than removing one outright.
+export type SiteWideAd = { name: string; src: string; attributes?: Record<string, string> }
 
-export const siteWideAds: SiteWideAd[] = [{ name: 'monetag-popunder', src: 'https://pl31235347.profitableratecpmnetwork.com/2f/82/b7/2f82b73e8f188696e540dbc36017e72f.js' }]
+export const siteWideAds: SiteWideAd[] = [
+  { name: 'monetag-multitag', src: 'https://quge5.com/88/tag.min.js', attributes: { 'data-zone': '277546' } },
+  { name: 'adsterra-popunder', src: 'https://pl31235347.profitableratecpmnetwork.com/2f/82/b7/2f82b73e8f188696e540dbc36017e72f.js' }
+]
