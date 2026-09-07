@@ -1,8 +1,8 @@
+import { useNavigate } from '@solidjs/router'
 import { Trash } from 'lucide-solid'
 import { Show } from 'solid-js'
 import Ad from '../components/ad'
 import { bookmarks, handleBookmark } from '../lib/bookmarks'
-import { useNavigate } from '@solidjs/router'
 
 export default function Bookmarks() {
   const navigate = useNavigate()
@@ -43,7 +43,7 @@ export default function Bookmarks() {
         </p>
       </Show>
 
-      <Ad placement="bookmarks" />
+      <Ad placement="bookmarks" when={bookmarks().length > 0} />
     </div>
   )
 }

@@ -61,7 +61,7 @@ export default function Games() {
             })}
       </div>
 
-      <Ad placement="games" />
+      <Ad placement="games" when={data().length > 0} />
     </div>
   )
 }

@@ -3,15 +3,16 @@ import { type ParentProps, createEffect, onCleanup, onMount } from 'solid-js'
 import { Toaster } from 'solid-toast'
 import Navbar from './components/navbar'
 
+import store from 'store2'
 import { handleAboutBlank } from './lib/aboutblank'
+import { setBookmarks } from './lib/bookmarks'
 import { handleTabCloak } from './lib/cloak'
 import { handlePanicKey } from './lib/panic'
-import { handleTheme } from './lib/theme'
 import { setupProxy } from './lib/proxy'
+import { loadSiteWideAds } from './lib/sitewide'
 import { pingStatus, startStatusPings } from './lib/status'
-import { setBookmarks } from './lib/bookmarks'
+import { handleTheme } from './lib/theme'
 import type { Bookmark } from './lib/types'
-import store from 'store2'
 
 export default function Layout(props: ParentProps) {
   // Everybody who has Mocha open is a user of it, so the ping that makes the
@@ -27,6 +28,11 @@ export default function Layout(props: ParentProps) {
   // too, so it is also the ping that says hello.
   createEffect(() => {
     void pingStatus(location.pathname)
+
+    // Same effect because it asks the same question of the same value: this
+    // runs on first render and on every navigation, and the loader decides
+    // whether the page it landed on is one ads belong on.
+    loadSiteWideAds(location.pathname)
   })
 
   onMount(async () => {

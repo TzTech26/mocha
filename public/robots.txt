@@ -1,4 +1,10 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://desginmyvan.com/sitemap.xml
+# Proxied pages, the viewer that frames them, and game assets fetched from
+# somebody else's CDN are all third party content served under this domain.
+# Indexed, they read as scraped duplicates of other people's pages, which is
+# what "low value content" means to a reviewer looking at this site.
+Disallow: /~/
+Disallow: /route/
+Disallow: /cdn

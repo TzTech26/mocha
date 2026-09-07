@@ -87,6 +87,10 @@ export default function Home() {
       <div class="absolute bottom-0 flex w-screen items-center justify-between p-4 px-6 text-sm">
         &copy; 2026 Mocha &middot; All rights reserved
         <div class="flex items-center gap-4">
+          <A href="/about" class="link-hover link">
+            About
+          </A>
+          <Dot class="-mx-3" />
           <A href="/terms" class="link-hover link">
             Terms of Service
           </A>
@@ -98,6 +102,10 @@ export default function Home() {
           <A href="/faq" class="link-hover link">
             FAQ
           </A>
+          <Dot class="-mx-3" />
+          <a class="link-hover link" href="https://buymeacoffee.com/proudparrot2" rel="noreferrer" target="_blank">
+            Donate
+          </a>
         </div>
       </div>
     </div>
