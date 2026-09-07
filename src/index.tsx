@@ -1,10 +1,12 @@
 import { Route, Router } from '@solidjs/router'
 import { render } from 'solid-js/web'
 import store from 'store2'
-import { handleDebug } from './lib/debug'
 import { analytics } from './lib/analytics'
+import { handleDebug } from './lib/debug'
 
 import Layout from './layout'
+import About from './routes/about'
+import Bookmarks from './routes/bookmarks'
 import FAQ from './routes/faq'
 import Games from './routes/games'
 import Home from './routes/home'
@@ -12,10 +14,9 @@ import Privacy from './routes/privacy'
 import Reports from './routes/reports'
 import ProxyViewer from './routes/route'
 import Settings from './routes/settings'
-import Status from './routes/status'
 import Shortcuts from './routes/shortcuts'
+import Status from './routes/status'
 import Terms from './routes/terms'
-import Bookmarks from './routes/bookmarks'
 import './style.css'
 
 analytics.trackPageview()
@@ -106,6 +107,7 @@ render(
       <Route path="/shortcuts" component={Shortcuts} />
       <Route path="/bookmarks" component={Bookmarks} />
       <Route path="/faq" component={FAQ} />
+      <Route path="/about" component={About} />
       <Route path="/terms" component={Terms} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/settings" component={Settings} />
