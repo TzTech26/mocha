@@ -5,7 +5,7 @@ export default function Terms() {
     <div class="mx-auto flex w-full max-w-3xl flex-col gap-6 p-8">
       <div>
         <h1 class="text-4xl font-bold">Terms of Service</h1>
-        <p class="pt-2 text-sm text-base-content/60">Last updated August 29, 2026</p>
+        <p class="pt-2 text-sm text-base-content/60">Last updated September 7, 2026</p>
       </div>
 
       <p>By using Mocha you agree to these terms. If you do not agree with them, do not use the service.</p>
@@ -36,7 +36,7 @@ export default function Terms() {
 
       <section class="flex flex-col gap-2">
         <h2 class="text-2xl font-semibold">Advertising</h2>
-        <p>Mocha is supported by ads served through Google AdSense. Interfering with how those ads are served, including clicking them artificially or blocking them programmatically for others, is not permitted.</p>
+        <p>Mocha is supported by ads served through Monetag. Some of those ads open in a separate window or tab. Interfering with how they are served, including clicking them artificially or blocking them programmatically for others, is not permitted.</p>
       </section>
 
       <section class="flex flex-col gap-2">

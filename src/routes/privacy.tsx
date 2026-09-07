@@ -5,7 +5,7 @@ export default function Privacy() {
     <div class="mx-auto flex w-full max-w-3xl flex-col gap-6 p-8">
       <div>
         <h1 class="text-4xl font-bold">Privacy Policy</h1>
-        <p class="pt-2 text-sm text-base-content/60">Last updated August 29, 2026</p>
+        <p class="pt-2 text-sm text-base-content/60">Last updated September 7, 2026</p>
       </div>
 
       <p>This policy explains what Mocha does and does not collect when you use it.</p>
@@ -39,28 +39,26 @@ export default function Privacy() {
 
       <section class="flex flex-col gap-2">
         <h2 class="text-2xl font-semibold">Advertising and cookies</h2>
-        <p>Mocha shows ads served by Google AdSense.</p>
+        <p>Mocha shows ads served by Monetag. Some of them open in a separate window or tab rather than appearing inside the page.</p>
         <ul class="list-disc pl-6">
-          <li>Google, as a third party vendor, uses cookies to serve ads on this site.</li>
-          <li>Google's use of advertising cookies enables it and its partners to serve ads to you based on your visit to this site and other sites on the internet.</li>
+          <li>Monetag and the advertisers buying through it are third parties, and they set their own cookies and similar identifiers when an ad is served.</li>
+          <li>Those identifiers are used to decide which ads to show you, to limit how often you see the same one, and to measure whether an ad was clicked. They are not set or read by us, and we do not receive them.</li>
+          <li>Ads are not served inside the proxy viewer, so nothing an advertiser sets is placed alongside a page you are browsing through Mocha.</li>
           <li>
-            You can opt out of personalized advertising by visiting{' '}
-            <a class="link" href="https://www.google.com/settings/ads" rel="noreferrer" target="_blank">
-              Google Ads Settings
+            How Monetag handles this data is described in its{' '}
+            <a class="link" href="https://monetag.com/privacy-policy/" rel="noreferrer" target="_blank">
+              privacy policy
             </a>
             .
           </li>
           <li>
-            You can opt out of third party vendor cookies more broadly at{' '}
+            You can opt out of interest based advertising from participating vendors at{' '}
             <a class="link" href="https://www.aboutads.info/choices/" rel="noreferrer" target="_blank">
               aboutads.info
-            </a>
-            .
-          </li>
-          <li>
-            More detail on how Google handles data is in{' '}
-            <a class="link" href="https://policies.google.com/technologies/partner-sites" rel="noreferrer" target="_blank">
-              Google's partner sites policy
+            </a>{' '}
+            and{' '}
+            <a class="link" href="https://www.youronlinechoices.com/" rel="noreferrer" target="_blank">
+              youronlinechoices.com
             </a>
             .
           </li>
