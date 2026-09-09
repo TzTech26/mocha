@@ -8,11 +8,42 @@
   }
 
   :root {
-    /* Width of one ad rail, and of the room the pages that show rails keep
-       clear on each edge for it. Read by both src/components/ad.tsx and the
+    /* Width of one ad rail, and of the room the screens that show rails keep
+       clear on that edge for it. Read by src/components/ad.tsx and by the
        screens that mount it, so the banner and the gap it sits in cannot drift
-       apart. Wide enough for a 160px skyscraper with a little air either
-       side. */
-    --ad-rail: 12rem;
+       apart. It widens with the window rather than squeezing a banner into a
+       column too narrow to read; rails themselves only appear from xl up, so
+       this value is only ever used from there. */
+    --ad-rail: 14rem;
   }
+
+  @media (min-width: 1536px) {
+    :root {
+      --ad-rail: 19rem;
+    }
+  }
+}
+
+/* The native banner ships its own layout, sized for a wide in-content slot: it
+   splits its items into a row of columns, which in a rail came out as four
+   slivers a character wide. Its class names are randomised per request, so
+   these go after the layout properties structurally rather than by name.
+   Unlayered and !important so they beat the stylesheet the loader injects into
+   the head at runtime, which lands after ours. Scoped to a rail, where the only
+   markup is the network's own, so nothing of ours is in range. */
+[data-ad-rail] [data-ad-container] * {
+  /* One item above the next, whatever the unit asked for. */
+  grid-template-columns: 1fr !important;
+  grid-auto-flow: row !important;
+  flex-direction: column !important;
+  flex-wrap: nowrap !important;
+
+  /* And nothing reaching past the edge of the rail. */
+  float: none !important;
+  max-width: 100% !important;
+}
+
+[data-ad-rail] [data-ad-container] img {
+  height: auto !important;
+  max-width: 100% !important;
 }

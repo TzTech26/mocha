@@ -59,12 +59,19 @@ function Rail(props: { side: AdSide; unit: AdUnit }) {
         // Narrower than that there is no room for a column beside the content,
         // and a banner with nowhere to go is better not shown than dropped into
         // the middle of the page.
-        'fixed top-1/2 z-30 hidden -translate-y-1/2 justify-center px-2 xl:flex',
+        //
+        // The wrapper is click-through: it is the full width of the rail
+        // whatever the banner turns out to be, and the padding around a short
+        // banner should not be eating clicks meant for the page behind it.
+        'pointer-events-none fixed top-1/2 z-30 hidden -translate-y-1/2 flex-col justify-center px-2 xl:flex',
         props.side === 'left' ? 'left-0' : 'right-0'
       )}
       style={{ width: railWidth }}
     >
-      <div id={props.unit.containerId} class="w-full" />
+      {/* Stacked one item above the next by the rules in style.css, which key
+          off data-ad-container. A unit tall enough to run off the top and
+          bottom of the window scrolls inside the rail instead. */}
+      <div id={props.unit.containerId} data-ad-container="true" class="pointer-events-auto max-h-[calc(100vh-8rem)] w-full overflow-y-auto" />
     </div>
   )
 }

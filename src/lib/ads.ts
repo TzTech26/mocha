@@ -31,21 +31,37 @@ export type AdUnit = { containerId: string; scriptSrc: string }
 
 // Adsterra NativeBanner_1, unit 31134849. One unit is reused across both
 // placements, which is fine because only one route is mounted at a time, so two
-// containers with this id are never in the page at once. Two rails on the same
-// screen is the case that does not work: the loader finds its container by id,
-// so the left rail needs its own unit from the dashboard rather than a second
-// copy of this one.
-const nativeBanner: AdUnit = {
+// containers with this id are never in the page at once.
+const rightBanner: AdUnit = {
   containerId: 'container-de573f947e06bb50827ceb6741737305',
   scriptSrc: 'https://pl31235348.profitableratecpmnetwork.com/de573f947e06bb50827ceb6741737305/invoke.js'
 }
 
-// Right rail only for now, because there is one banner unit. Create a second
-// one in Adsterra and drop it in as `left` and both rails fill in; the layout
-// already keeps the room for it on either side.
+// The left rail, and the one thing here that needs doing by hand.
+//
+// It cannot be another copy of the unit above. The loader finds its container
+// by id and fills it, so with that id on the page twice only the first one is
+// ever filled and the other rail stays empty - and a single unit counted twice
+// on one screen is what an ad network reads as invalid traffic, which is the
+// account rather than just the rail.
+//
+// So it needs a unit of its own, which takes about a minute:
+//   Adsterra dashboard -> Websites -> this site -> Native Banner -> Create
+// The snippet it hands back is a <div id="container-..."> and a <script
+// src="...invoke.js">. Put those two values here, exactly as given:
+//
+//   const leftBanner: AdUnit | null = {
+//     containerId: 'container-<the new key>',
+//     scriptSrc: 'https://<the new host>/<the new key>/invoke.js'
+//   }
+//
+// Nothing else changes - both rails are already built, and the games list and
+// the viewer both make room on this edge the moment it stops being null.
+const leftBanner: AdUnit | null = null
+
 export const adRails: Record<AdPlacement, Record<AdSide, AdUnit | null>> = {
-  games: { left: null, right: nativeBanner },
-  viewer: { left: null, right: nativeBanner }
+  games: { left: leftBanner, right: rightBanner },
+  viewer: { left: leftBanner, right: rightBanner }
 }
 
 // --- Site wide formats ---
