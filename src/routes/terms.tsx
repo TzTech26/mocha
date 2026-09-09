@@ -1,5 +1,3 @@
-import Ad from '../components/ad'
-
 export default function Terms() {
   return (
     <div class="mx-auto flex w-full max-w-3xl flex-col gap-6 p-8">
@@ -36,7 +34,7 @@ export default function Terms() {
 
       <section class="flex flex-col gap-2">
         <h2 class="text-2xl font-semibold">Advertising</h2>
-        <p>Mocha is supported by ads served through Monetag and Adsterra. Some of those ads open in a separate window or tab, or appear over the page. Interfering with how they are served, including clicking them artificially or blocking them programmatically for others, is not permitted.</p>
+        <p>Mocha is supported by banner ads served through Monetag and Adsterra, shown beside the games list and beside a game or proxied page while it is open. Interfering with how they are served, including clicking them artificially or blocking them programmatically for others, is not permitted.</p>
       </section>
 
       <section class="flex flex-col gap-2">
@@ -48,8 +46,6 @@ export default function Terms() {
         <h2 class="text-2xl font-semibold">Changes</h2>
         <p>These terms may change. Continuing to use Mocha after a change means you accept the updated terms.</p>
       </section>
-
-      <Ad placement="legal" />
     </div>
   )
 }

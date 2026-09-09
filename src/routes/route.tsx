@@ -4,6 +4,7 @@ import { Bookmark, ChevronLeft, ChevronRight, CircleAlert, FileCode, Flag, Home,
 import { Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js'
 import toast from 'solid-toast'
 import store from 'store2'
+import Ad, { adRailInset } from '../components/ad'
 import { openAbWindow } from '../lib/aboutblank'
 import { bookmarks, handleBookmark } from '../lib/bookmarks'
 import { gameIdFromTarget } from '../lib/games'
@@ -199,8 +200,12 @@ export default function Route() {
   }
   return (
     <div>
+      {/* Insets itself by one rail on each edge wherever the rails are
+          actually rendered, so a banner sits beside the page being viewed
+          rather than on top of it. Below xl there are no rails and the viewer
+          has the whole window, as before. */}
       <iframe
-        class="h-screen w-screen fixed"
+        class={clsx('fixed inset-y-0 h-screen', adRailInset('viewer'))}
         ref={
           // biome-ignore lint: needs to be here for Solid refs
           ref!
@@ -355,6 +360,11 @@ export default function Route() {
           </button>
         </div>
       </div>
+
+      {/* Held back until the proxy is up, which is the point where the frame
+          has something in it rather than being a blank screen with a banner
+          next to it. */}
+      <Ad placement="viewer" when={proxyReady()} />
 
       <div data-viewer-controls class={clsx('fixed bottom-2 right-2 transition-opacity duration-300', showControls() ? 'opacity-0 pointer-events-none' : 'opacity-100')}>
         <div class="tooltip tooltip-left" data-tip="Maximize control bar">

@@ -5,36 +5,47 @@
 // a proxy is structural rather than something more copy fixes - so it is gone
 // entirely and Monetag serves the ads instead. Monetag accepts this site
 // category, which is the property that actually matters here.
-export const adPlacements = ['games', 'shortcuts', 'bookmarks', 'faq', 'legal', 'about'] as const
+
+// The only two screens that carry ads: the games list, and the viewer, which
+// is both a game being played and any page opened through the proxy - they are
+// the same route. Everything else - the home page, shortcuts, bookmarks, the
+// FAQ, the legal pages, settings, status, reports - shows nothing at all.
+export const adPlacements = ['games', 'viewer'] as const
 
 export type AdPlacement = (typeof adPlacements)[number]
 
-// --- Per placement units ---
+// Ads only ever appear as a banner pinned to the left or right edge, never in
+// the flow of the page and never over the top of it.
+export const adSides = ['left', 'right'] as const
+
+export type AdSide = (typeof adSides)[number]
+
+// --- Per rail units ---
 // Banner-style units that render into a container on the page. The values come
 // from an Adsterra ad unit's snippet: the id of its container <div> and the src
 // of its loader <script>, both verbatim.
 //
-// A null placement renders nothing at all, so the site never shows an empty ad
-// box for a unit that has not been created yet.
+// A null rail renders nothing at all, so the site never shows an empty ad box
+// for a unit that has not been created yet.
 export type AdUnit = { containerId: string; scriptSrc: string }
 
-// Adsterra NativeBanner_1, unit 31134849. One unit is reused across every
-// placement, which is fine because only one route is mounted at a time, so two
-// containers with this id are never in the page at once. Splitting it into a
-// unit per page would only be worth doing to see the pages reported separately
-// in Adsterra's stats.
+// Adsterra NativeBanner_1, unit 31134849. One unit is reused across both
+// placements, which is fine because only one route is mounted at a time, so two
+// containers with this id are never in the page at once. Two rails on the same
+// screen is the case that does not work: the loader finds its container by id,
+// so the left rail needs its own unit from the dashboard rather than a second
+// copy of this one.
 const nativeBanner: AdUnit = {
   containerId: 'container-de573f947e06bb50827ceb6741737305',
   scriptSrc: 'https://pl31235348.profitableratecpmnetwork.com/de573f947e06bb50827ceb6741737305/invoke.js'
 }
 
-export const adUnits: Record<AdPlacement, AdUnit | null> = {
-  games: nativeBanner,
-  shortcuts: nativeBanner,
-  bookmarks: nativeBanner,
-  faq: nativeBanner,
-  legal: nativeBanner,
-  about: nativeBanner
+// Right rail only for now, because there is one banner unit. Create a second
+// one in Adsterra and drop it in as `left` and both rails fill in; the layout
+// already keeps the room for it on either side.
+export const adRails: Record<AdPlacement, Record<AdSide, AdUnit | null>> = {
+  games: { left: null, right: nativeBanner },
+  viewer: { left: null, right: nativeBanner }
 }
 
 // --- Site wide formats ---
@@ -54,8 +65,8 @@ export const adUnits: Record<AdPlacement, AdUnit | null> = {
 //              entirely is the safe choice.
 //   Adsterra - the popunder needs a frequency cap, one per visitor per day
 //              rather than per click, before it goes anywhere near live again.
-// Either way, gate it to a route in lib/sitewide.ts rather than the whole
-// site, so the home page stays clean.
+// lib/sitewide.ts already holds these to the same two screens as the rails, so
+// the rest of the site stays clean either way.
 export type SiteWideAd = { name: string; src: string; enabled: boolean; attributes?: Record<string, string> }
 
 export const siteWideAds: SiteWideAd[] = [

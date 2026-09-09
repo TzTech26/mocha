@@ -1,5 +1,4 @@
 import { A } from '@solidjs/router'
-import Ad from '../components/ad'
 
 export default function About() {
   return (
@@ -87,8 +86,6 @@ export default function About() {
           , which goes toward server costs and domains rather than ads.
         </p>
       </section>
-
-      <Ad placement="about" />
     </div>
   )
 }
