@@ -1,5 +1,3 @@
-import Ad from '../components/ad'
-
 export default function Privacy() {
   return (
     <div class="mx-auto flex w-full max-w-3xl flex-col gap-6 p-8">
@@ -39,11 +37,11 @@ export default function Privacy() {
 
       <section class="flex flex-col gap-2">
         <h2 class="text-2xl font-semibold">Advertising and cookies</h2>
-        <p>Mocha shows ads served by two advertising networks, Monetag and Adsterra. Some of their formats open in a separate window or tab, or appear over the page, rather than sitting inside it. They run on every part of the site, including while a game or a proxied page is open.</p>
+        <p>Mocha shows ads served by two advertising networks, Monetag and Adsterra. They appear only as banners pinned to the left or right edge of the screen, and only on the games list and while a game or a proxied page is open. No other part of the site carries advertising.</p>
         <ul class="list-disc pl-6">
           <li>Both networks, and the advertisers buying through them, are third parties, and they set their own cookies and similar identifiers when an ad is served.</li>
           <li>Those identifiers are used to decide which ads to show you, to limit how often you see the same one, and to measure whether an ad was clicked. They are not set or read by us, and we do not receive them.</li>
-          <li>Ads are shown by Mocha itself, around the proxy rather than inside it. Nothing is injected into the pages you open through the proxy, and the ad networks are not told which sites those are.</li>
+          <li>Ads are shown by Mocha itself, in the margins beside the proxy rather than inside it. Nothing is injected into the pages you open through the proxy, and the ad networks are not told which sites those are.</li>
           <li>
             How each network handles this data is described in the{' '}
             <a class="link" href="https://monetag.com/privacy-policy/" rel="noreferrer" target="_blank">
@@ -83,8 +81,6 @@ export default function Privacy() {
         <h2 class="text-2xl font-semibold">Changes</h2>
         <p>This policy may change. The date at the top reflects the most recent revision.</p>
       </section>
-
-      <Ad placement="legal" />
     </div>
   )
 }

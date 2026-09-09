@@ -1,7 +1,6 @@
 import { Show, createSignal, onMount } from 'solid-js'
 import type { ShortcutData } from '../lib/types'
 
-import Ad from '../components/ad'
 import Shortcut from '../components/shortcut'
 
 export default function Shortcuts() {
@@ -29,8 +28,6 @@ export default function Shortcuts() {
           return <Shortcut shortcut={shortcut} />
         })}
       </div>
-
-      <Ad placement="shortcuts" when={data().length > 0} />
     </div>
   )
 }

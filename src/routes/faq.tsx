@@ -1,5 +1,4 @@
 import { A } from '@solidjs/router'
-import Ad from '../components/ad'
 
 export default function FAQ() {
   return (
@@ -63,7 +62,6 @@ export default function FAQ() {
           <p>The proxy is hosted on a shared server that serves all users. If there is a significant amount of users at one time, it can cause network congestion and slow down requests. </p>
         </div>
       </div>
-      <Ad placement="faq" />
     </div>
   )
 }

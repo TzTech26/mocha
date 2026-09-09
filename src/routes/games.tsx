@@ -1,8 +1,9 @@
 import { A } from '@solidjs/router'
+import clsx from 'clsx'
 import Fuse, { type FuseResult } from 'fuse.js'
 import { Flag } from 'lucide-solid'
 import { Show, createSignal, onMount } from 'solid-js'
-import Ad from '../components/ad'
+import Ad, { adRailPadding } from '../components/ad'
 import Game from '../components/game'
 import { fetchReports } from '../lib/reports'
 import type { GameData, GameReport } from '../lib/types'
@@ -37,7 +38,7 @@ export default function Games() {
   })
 
   return (
-    <div class="flex flex-col items-center gap-2 py-4">
+    <div class={clsx('flex flex-col items-center gap-2 py-4', adRailPadding('games'))}>
       <Show when={data()[0]}>
         <input type="text" class="input input-bordered w-1/3" onInput={(e) => handleSearch(e.target.value)} placeholder={`Search ${data().length} games`} />
         <A href="/reports" class="flex items-center gap-1.5 text-xs text-base-content/40 duration-150 hover:text-base-content/70">

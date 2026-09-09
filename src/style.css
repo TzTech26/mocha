@@ -6,4 +6,13 @@
   body {
     font-family: 'Quicksand', sans-serif;
   }
+
+  :root {
+    /* Width of one ad rail, and of the room the pages that show rails keep
+       clear on each edge for it. Read by both src/components/ad.tsx and the
+       screens that mount it, so the banner and the gap it sits in cannot drift
+       apart. Wide enough for a 160px skyscraper with a little air either
+       side. */
+    --ad-rail: 12rem;
+  }
 }
