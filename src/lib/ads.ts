@@ -14,54 +14,56 @@ export const adPlacements = ['games', 'viewer'] as const
 
 export type AdPlacement = (typeof adPlacements)[number]
 
-// Ads only ever appear as a banner pinned to the left or right edge, never in
-// the flow of the page and never over the top of it.
+// Ads only ever appear as a banner in one of the two rails down the sides of
+// the page, never in the flow of the content and never over the top of it.
 export const adSides = ['left', 'right'] as const
 
 export type AdSide = (typeof adSides)[number]
 
-// --- Per rail units ---
+// --- Units ---
 // Banner-style units that render into a container on the page. The values come
 // from an Adsterra ad unit's snippet: the id of its container <div> and the src
 // of its loader <script>, both verbatim.
 //
-// A null rail renders nothing at all, so the site never shows an empty ad box
-// for a unit that has not been created yet.
-export type AdUnit = { containerId: string; scriptSrc: string }
+// `isolate` puts the unit in a frame of its own rather than straight into the
+// page. The loader finds its container by id, so a container id can only
+// appear in a document once - a second copy in the same document is simply
+// never filled. A frame is its own document, so an isolated unit gets its own
+// copy of both the container and the loader and fills normally. That is the
+// only way to run one unit in two rails at once; see leftBanners below.
+export type AdUnit = { containerId: string; scriptSrc: string; isolate?: boolean }
 
-// Adsterra NativeBanner_1, unit 31134849. One unit is reused across both
-// placements, which is fine because only one route is mounted at a time, so two
-// containers with this id are never in the page at once.
-const rightBanner: AdUnit = {
+// Adsterra NativeBanner_1, unit 31134849. Reused across both placements, which
+// needs nothing special: only one route is mounted at a time, so the games
+// list's copy and the viewer's are never in the page together.
+const nativeBanner: AdUnit = {
   containerId: 'container-de573f947e06bb50827ceb6741737305',
   scriptSrc: 'https://pl31235348.profitableratecpmnetwork.com/de573f947e06bb50827ceb6741737305/invoke.js'
 }
 
-// The left rail, and the one thing here that needs doing by hand.
+// --- Rails ---
+// The banners in each rail, top to bottom. A rail is a column in the page
+// rather than something pinned to the window, so it is as long as the page is
+// and there is room for more than one banner down it - worth doing on the games
+// list, where the grid runs for several screens and a single banner at the top
+// is off screen for most of them.
 //
-// It cannot be another copy of the unit above. The loader finds its container
-// by id and fills it, so with that id on the page twice only the first one is
-// ever filled and the other rail stays empty - and a single unit counted twice
-// on one screen is what an ad network reads as invalid traffic, which is the
-// account rather than just the rail.
+// Adding one is two values from the dashboard:
+//   Adsterra -> Websites -> this site -> Native Banner -> Create
+// which hands back a <div id="container-..."> and a <script src="...invoke.js">.
+// Append them here as another entry and the rail grows by one banner.
 //
-// So it needs a unit of its own, which takes about a minute:
-//   Adsterra dashboard -> Websites -> this site -> Native Banner -> Create
-// The snippet it hands back is a <div id="container-..."> and a <script
-// src="...invoke.js">. Put those two values here, exactly as given:
-//
-//   const leftBanner: AdUnit | null = {
-//     containerId: 'container-<the new key>',
-//     scriptSrc: 'https://<the new host>/<the new key>/invoke.js'
-//   }
-//
-// Nothing else changes - both rails are already built, and the games list and
-// the viewer both make room on this edge the moment it stops being null.
-const leftBanner: AdUnit | null = null
+// Prefer a real second unit over another isolated copy of the one above. Both
+// render, but a single unit counted twice on a page is the sort of thing an ad
+// network reads as invalid traffic, and the reporting cannot tell the two rails
+// apart either. The isolated copy is here because both rails should be filled
+// today; swap it for a unit of its own when there is one.
+const rightBanners: AdUnit[] = [nativeBanner]
+const leftBanners: AdUnit[] = [{ ...nativeBanner, isolate: true }]
 
-export const adRails: Record<AdPlacement, Record<AdSide, AdUnit | null>> = {
-  games: { left: leftBanner, right: rightBanner },
-  viewer: { left: leftBanner, right: rightBanner }
+export const adRails: Record<AdPlacement, Record<AdSide, AdUnit[]>> = {
+  games: { left: leftBanners, right: rightBanners },
+  viewer: { left: leftBanners, right: rightBanners }
 }
 
 // --- Site wide formats ---
