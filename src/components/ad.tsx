@@ -1,24 +1,15 @@
 import clsx from 'clsx'
 import { For, Show, onCleanup, onMount } from 'solid-js'
-import { type AdPlacement, type AdSide, type AdUnit, adRails, adSides } from '../lib/ads'
+import { type AdUnit, adRails, adSides } from '../lib/ads'
 
-// Whether this screen has anything for that edge. An empty rail is not
-// rendered and takes no room, so the page never holds a gap open for a banner
-// that is not coming.
-function hasRail(placement: AdPlacement, side: AdSide) {
-  return adRails[placement][side].length > 0
-}
+// Classes for the viewer's frame, which has to sit between the rails rather
+// than under them. Below xl there are no rails and it gets the whole window
+// back, and an edge with no unit behind it gives its width back too.
+export function adRailInset() {
+  const left = Boolean(adRails.left)
+  const rails = Number(left) + Number(Boolean(adRails.right))
 
-// Classes for a fixed, full window element that has to sit between the rails
-// rather than under them - the proxy viewer's frame is the only one, which is
-// why this reads the viewer's narrower rail width. Below xl there are no rails
-// and it gets the whole window back.
-export function adRailInset(placement: AdPlacement) {
-  const left = hasRail(placement, 'left')
-  const right = hasRail(placement, 'right')
-  const rails = Number(left) + Number(right)
-
-  return clsx('left-0 w-screen', left && 'xl:left-[var(--ad-rail-viewer)]', rails === 1 && 'xl:w-[calc(100vw-var(--ad-rail-viewer))]', rails === 2 && 'xl:w-[calc(100vw-var(--ad-rail-viewer)*2)]')
+  return clsx('left-0 w-screen', left && 'xl:left-[var(--ad-rail)]', rails === 1 && 'xl:w-[calc(100vw-var(--ad-rail))]', rails === 2 && 'xl:w-[calc(100vw-var(--ad-rail)*2)]')
 }
 
 // The unit's own layout is a row of columns, sized for a wide in-content slot,
@@ -43,43 +34,13 @@ const stackCss = `
 `
 
 // The single-item rule from style.css, for a frame that has to apply it
-// itself. Keep the two in step.
+// itself. Not conditional the way it is on the page: a frame only ever exists
+// in a viewer rail. Keep the two in step.
 const singleCss = `
   [data-ad-container] > * > *:not(:first-child) {
     display: none !important;
   }
 `
-
-// The spacing rules from style.css, for a frame that has to apply them itself.
-// The gap arrives as pixels rather than the page's own vh: inside a frame vh
-// is the frame's height, which is set from the height of its contents, which
-// this would then be part of - a gap that grows the frame that defines it.
-function spreadCss(gap: number) {
-  return `
-    [data-ad-container],
-    [data-ad-container] > * {
-      display: flex !important;
-      flex-direction: column !important;
-      gap: ${gap}px !important;
-    }
-  `
-}
-
-// What --ad-gap comes to on this window, in pixels. Read off a throwaway
-// element rather than restated here, so style.css stays the one place the
-// spacing is decided.
-function railGap() {
-  const probe = window.document.createElement('div')
-
-  probe.style.cssText = 'position:absolute;visibility:hidden;height:var(--ad-gap)'
-  window.document.body.appendChild(probe)
-
-  const gap = probe.offsetHeight
-
-  probe.remove()
-
-  return gap
-}
 
 // The site's own webfont, so a banner in a frame is not lettered in the
 // browser's default serif next to one that is not.
@@ -119,7 +80,7 @@ function Unit(props: { unit: AdUnit }) {
 // same origin, so the frame can be measured and kept exactly as tall as what
 // the loader put in it, and it starts at zero height so an empty one is
 // invisible rather than a gap.
-function IsolatedUnit(props: { unit: AdUnit; spread?: boolean; single?: boolean }) {
+function IsolatedUnit(props: { unit: AdUnit }) {
   let frame: HTMLIFrameElement | undefined
 
   // A frame is a document of its own, so it inherits nothing: left alone the
@@ -151,7 +112,7 @@ function IsolatedUnit(props: { unit: AdUnit; spread?: boolean; single?: boolean 
       // out of the render path, and it is switched on once it arrives; if it
       // never does, the fallback below is already drawn.
       `<link rel="stylesheet" media="print" onload="this.media='all'" href="${fontHref}">`,
-      `<style>html,body{margin:0;padding:0;color-scheme:${scheme};background:${ground};color:${colour};font-family:'Quicksand',sans-serif}${stackCss}${props.spread ? spreadCss(railGap()) : ''}${props.single ? singleCss : ''}</style>`,
+      `<style>html,body{margin:0;padding:0;color-scheme:${scheme};background:${ground};color:${colour};font-family:'Quicksand',sans-serif}${stackCss}${singleCss}</style>`,
       '</head><body>',
       `<div id="${props.unit.containerId}" data-ad-container="true"></div>`,
       `<script async data-cfasync="false" src="${props.unit.scriptSrc}"><\/script>`,
@@ -260,47 +221,25 @@ function IsolatedUnit(props: { unit: AdUnit; spread?: boolean; single?: boolean 
 // sides and have the spare one quietly load the ad script a second time. It
 // is read once, which is all it needs: which units there are is fixed
 // configuration, not something that changes while the page is open.
-function Banner(props: { unit: AdUnit; spread?: boolean; single?: boolean }) {
-  return props.unit.isolate ? <IsolatedUnit unit={props.unit} spread={props.spread} single={props.single} /> : <Unit unit={props.unit} />
+function Banner(props: { unit: AdUnit }) {
+  return props.unit.isolate ? <IsolatedUnit unit={props.unit} /> : <Unit unit={props.unit} />
 }
 
-// A rail as a column in the page: it sits in the flow beside the content, so it
-// scrolls away with everything else rather than following the window down, and
-// it is as long as however many banners are in it. Only from xl up, because
-// narrower than that there is no room for a column beside the content, and a
-// banner with nowhere to go is better not shown than dropped into the middle of
-// the page.
+// The viewer's rails. It is one frame filling the window, so there is no page
+// flow for a column to sit in and these are pinned to the edges instead, and
+// nothing to scroll to reach a second banner - one ad down each edge, tall and
+// thin, beside the page rather than around it. The unit's own three or four
+// items would be eight ads around one game, so only the first is shown.
 //
-// Screens whose contents arrive asynchronously pass `when` to say the content
-// is actually there. A banner beside a loading spinner is a screen with no
-// publisher content of its own, which is what gets a site thrown out of an ad
-// network.
-export function AdColumn(props: { placement: AdPlacement; side: AdSide; when?: boolean }) {
-  const units = () => adRails[props.placement][props.side]
-
-  return (
-    <Show when={props.when !== false && units().length > 0}>
-      <aside data-ad-rail={props.side} data-ad-spread="true" class="hidden shrink-0 flex-col gap-8 xl:flex" style={{ width: 'var(--ad-rail)' }}>
-        <For each={units()}>{(unit) => <Banner unit={unit} spread />}</For>
-      </aside>
-    </Show>
-  )
-}
-
-// Both rails beside a screen with no page to scroll: the viewer is one frame
-// filling the window, so there is no flow for a column to sit in and these are
-// pinned to the edges instead.
-//
-// One ad down each edge and no more. Without a scroll there is no way to reach
-// a second banner, and the unit's own three or four items would be eight ads
-// around one game, so a rail here takes the first banner and shows the first
-// item of it: tall and thin, beside the page rather than around it.
-export default function Ad(props: { placement: AdPlacement; when?: boolean }) {
+// `when` says the viewer has something in it. A banner beside a blank frame is
+// a screen with no publisher content of its own, which is what gets a site
+// thrown out of an ad network.
+export default function Ad(props: { when?: boolean }) {
   return (
     <Show when={props.when !== false}>
       <For each={adSides}>
         {(side) => (
-          <Show when={adRails[props.placement][side][0]}>
+          <Show when={adRails[side]}>
             {(unit) => (
               <div
                 data-ad-rail={side}
@@ -309,10 +248,10 @@ export default function Ad(props: { placement: AdPlacement; when?: boolean }) {
                 // be eating clicks meant for the page behind it.
                 data-ad-single="true"
                 class={clsx('pointer-events-none fixed top-1/2 z-30 hidden max-h-screen -translate-y-1/2 flex-col justify-center overflow-hidden px-2 xl:flex', side === 'left' ? 'left-0' : 'right-0')}
-                style={{ width: 'var(--ad-rail-viewer)' }}
+                style={{ width: 'var(--ad-rail)' }}
               >
                 <div class="pointer-events-auto w-full">
-                  <Banner unit={unit()} single />
+                  <Banner unit={unit()} />
                 </div>
               </div>
             )}

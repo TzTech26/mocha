@@ -37,7 +37,7 @@ export default function Privacy() {
 
       <section class="flex flex-col gap-2">
         <h2 class="text-2xl font-semibold">Advertising and cookies</h2>
-        <p>Mocha shows ads served by two advertising networks, Monetag and Adsterra. They appear only as banners pinned to the left or right edge of the screen, and only on the games list and while a game or a proxied page is open. No other part of the site carries advertising.</p>
+        <p>Mocha shows ads served by two advertising networks, Monetag and Adsterra. They appear only as a banner down each side of the screen, and only while a game or a proxied page is open. No other part of the site carries advertising.</p>
         <ul class="list-disc pl-6">
           <li>Both networks, and the advertisers buying through them, are third parties, and they set their own cookies and similar identifiers when an ad is served.</li>
           <li>Those identifiers are used to decide which ads to show you, to limit how often you see the same one, and to measure whether an ad was clicked. They are not set or read by us, and we do not receive them.</li>

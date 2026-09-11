@@ -9,13 +9,14 @@ let loaded = false
 // in lib/ads.ts for what these did to the page, and what to change in the
 // dashboards before switching one back on.
 //
-// The gate is the same one the rails use: the games list, and the viewer, which
-// covers both a game being played and any page opened through the proxy. Every
-// other screen - the home page above all, since it is the first thing a visitor
-// sees - stays clean. Note that a script loaded here stays loaded for the rest
-// of the visit, because navigating inside a single page app never reloads the
-// document; the gate decides where these can start, not where they run.
-const allowed = ['/games', '/route/']
+// The gate is the same one the rails use: the viewer, which covers both a game
+// being played and any page opened through the proxy. Every other screen - the
+// home page above all, since it is the first thing a visitor sees, and the
+// games list, which is somebody still choosing - stays clean. Note that a
+// script loaded here stays loaded for the rest of the visit, because
+// navigating inside a single page app never reloads the document; the gate
+// decides where these can start, not where they run.
+const allowed = ['/route/']
 
 export function loadSiteWideAds(pathname: string) {
   if (loaded) return
