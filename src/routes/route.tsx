@@ -205,7 +205,7 @@ export default function Route() {
           rather than on top of it. Below xl there are no rails and the viewer
           has the whole window, as before. */}
       <iframe
-        class={clsx('fixed inset-y-0 h-screen', adRailInset('viewer'))}
+        class={clsx('fixed inset-y-0 h-screen', adRailInset())}
         ref={
           // biome-ignore lint: needs to be here for Solid refs
           ref!
@@ -364,7 +364,7 @@ export default function Route() {
       {/* Held back until the proxy is up, which is the point where the frame
           has something in it rather than being a blank screen with a banner
           next to it. */}
-      <Ad placement="viewer" when={proxyReady()} />
+      <Ad when={proxyReady()} />
 
       <div data-viewer-controls class={clsx('fixed bottom-2 right-2 transition-opacity duration-300', showControls() ? 'opacity-0 pointer-events-none' : 'opacity-100')}>
         <div class="tooltip tooltip-left" data-tip="Maximize control bar">
