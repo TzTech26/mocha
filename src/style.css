@@ -15,6 +15,23 @@
        column too narrow to read; rails themselves only appear from xl up, so
        this value is only ever used from there. */
     --ad-rail: 14rem;
+
+    /* How far apart the items in a rail's banner sit. The unit renders them as
+       one block, which at the top of a column running the length of the games
+       grid means every ad is above the fold and there is nothing at all beside
+       the other thirty screens. Spread over a page that long they would be
+       eleven thousand pixels apart and two of the three would never be seen,
+       so this is a fixed step rather than a share of the page: roughly one
+       banner per screen scrolled, for as far as the banners go.
+
+       The real answer to covering a page this long is more units in the rail,
+       which lib/ads.ts takes a list for. */
+    --ad-gap: 40vh;
+
+    /* The viewer's rails are narrower: one tall, skinny banner down each edge
+       beside the page being viewed, rather than a column of them. Sized for a
+       160px skyscraper with a little air either side. */
+    --ad-rail-viewer: 11rem;
   }
 
   @media (min-width: 1536px) {
@@ -46,4 +63,21 @@
 [data-ad-rail] [data-ad-container] img {
   height: auto !important;
   max-width: 100% !important;
+}
+
+/* One banner and no more, for a rail with no room for a column of them. The
+   unit renders three or four items in a block, which down both edges of the
+   viewer is eight ads around one game. Only the first of them is kept. */
+[data-ad-single] [data-ad-container] > * > *:not(:first-child) {
+  display: none !important;
+}
+
+/* Only in a rail that scrolls with the page. The viewer's rails are pinned to
+   a window with nothing to scroll, so spacing their banner out would push most
+   of it off the screen for good. */
+[data-ad-spread] [data-ad-container],
+[data-ad-spread] [data-ad-container] > * {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: var(--ad-gap) !important;
 }

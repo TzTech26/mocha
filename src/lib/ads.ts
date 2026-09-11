@@ -58,6 +58,14 @@ const nativeBanner: AdUnit = {
 // network reads as invalid traffic, and the reporting cannot tell the two rails
 // apart either. The isolated copy is here because both rails should be filled
 // today; swap it for a unit of its own when there is one.
+//
+// The viewer would be better served by a unit of a different shape. A native
+// banner is a block of three or four items, which is a column on the games
+// list but around a game is eight ads for one screen - so the viewer takes the
+// first banner here and shows one item of it, and the rest of the block is
+// paid for and never seen. An Adsterra Banner unit at 160x600 is one creative
+// the exact shape of that rail, and dropping one into a `viewer` entry of its
+// own below would be the right way to fill it.
 const rightBanners: AdUnit[] = [nativeBanner]
 const leftBanners: AdUnit[] = [{ ...nativeBanner, isolate: true }]
 
