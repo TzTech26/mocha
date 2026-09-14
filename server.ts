@@ -14,6 +14,7 @@ import express from 'express'
 import { build } from 'vite'
 import { startDiagnostics } from './src/server/diagnostics'
 import { handleReportsRequest } from './src/server/reports'
+import { renderPage } from './src/server/seo'
 import { handleStatusRequest } from './src/server/status'
 import { routeWisp } from './src/server/wisp'
 
@@ -105,7 +106,11 @@ app.use('/api/status', handleStatusRequest)
 // mounting it here: the catch all would answer it with the page.
 app.use('/api/reports', handleReportsRequest)
 
-app.use(express.static('dist'))
+// index: false so a request for / falls through to the catch all below rather
+// than being answered here with the file as it sits on disk. The file on disk
+// carries the default head, which is every page's head, which is the problem
+// the catch all exists to solve.
+app.use(express.static('dist', { index: false }))
 
 // Refuse anything that would escape the cache directory, since the path comes
 // from the request.
@@ -171,8 +176,16 @@ app.use('/cdn', async (req, res) => {
   }
 })
 
-app.get('*', (_req, res) => {
-  res.sendFile(path.resolve('dist', 'index.html'))
+// Every address the app owns is answered with the same index.html, so without
+// this every one of them carries the same title and the same description, and
+// a crawler that does not run JavaScript - which is most of them, and Google
+// until its second pass - has nothing to tell them apart by. The head for this
+// particular address is written into the file on the way out. See
+// src/server/seo.ts.
+app.get('*', (req, res) => {
+  const { status, html } = renderPage(req.path)
+
+  res.status(status).type('html').send(html)
 })
 
 httpServer.on('request', (req, res) => {

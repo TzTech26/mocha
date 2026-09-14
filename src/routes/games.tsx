@@ -37,6 +37,12 @@ export default function Games() {
 
   return (
     <div class="flex flex-col items-center gap-2 py-4">
+      {/* A page about unblocked games with no heading and no sentence on it is
+          a page Google has nothing to read. Both are what the page is actually
+          for, so they are short and sit above the search box. */}
+      <h1 class="text-3xl font-bold">Unblocked games</h1>
+      <p class="max-w-2xl px-4 text-center text-sm text-base-content/60">Free games that run in your browser at school or work. Nothing to download, nothing to install and no account - pick one and it opens through Mocha.</p>
+
       <Show when={data()[0]}>
         <input type="text" class="input input-bordered w-1/3" onInput={(e) => handleSearch(e.target.value)} placeholder={`Search ${data().length} games`} />
         <A href="/reports" class="flex items-center gap-1.5 text-xs text-base-content/40 duration-150 hover:text-base-content/70">

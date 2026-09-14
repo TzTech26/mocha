@@ -4,11 +4,30 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mocha</title>
 
-    <meta content="Mocha" property="og:title" />
-    <meta content="The simplicity and power you expect from a web proxy. Browse the internet safely, securely, and in style." property="og:description" />
-    <meta content="/icon.png" property="og:image" />
+    <!-- Everything between these markers is written per page: the server swaps
+         it for the head that belongs to the address being asked for, and the
+         app swaps it again on every navigation. The defaults here are what a
+         browser sees before either of them runs, and what the home page says.
+         See src/lib/seo.ts for the copy and src/server/seo.ts for the swap.
+         Anything hand written outside the markers is left alone. -->
+    <!--seo-->
+    <title data-seo>Mocha - Free Web Proxy and Unblocked Games</title>
+    <meta name="description" content="Open blocked sites and play unblocked games free at school or work. Mocha is a fast, encrypted web proxy with nothing to download and nothing to install." data-seo />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" data-seo />
+    <meta property="og:title" content="Mocha - Free Web Proxy and Unblocked Games" data-seo />
+    <meta property="og:description" content="Open blocked sites and play unblocked games free at school or work. Mocha is a fast, encrypted web proxy with nothing to download and nothing to install." data-seo />
+    <meta property="og:type" content="website" data-seo />
+    <meta property="og:url" content="https://desginmyvan.com/" data-seo />
+    <meta property="og:image" content="https://desginmyvan.com/embed.png" data-seo />
+    <meta property="og:site_name" content="Mocha" data-seo />
+    <meta name="twitter:card" content="summary_large_image" data-seo />
+    <meta name="twitter:title" content="Mocha - Free Web Proxy and Unblocked Games" data-seo />
+    <meta name="twitter:description" content="Open blocked sites and play unblocked games free at school or work. Mocha is a fast, encrypted web proxy with nothing to download and nothing to install." data-seo />
+    <meta name="twitter:image" content="https://desginmyvan.com/embed.png" data-seo />
+    <link rel="canonical" href="https://desginmyvan.com/" data-seo />
+    <!--/seo-->
+
     <meta content="#0a0a0a" name="theme-color" />
 
     <!-- Monetag site verification. This has to stay in the served HTML for the

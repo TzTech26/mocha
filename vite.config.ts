@@ -3,6 +3,8 @@ import { defineConfig, normalizePath } from 'vite'
 import solid from 'vite-plugin-solid'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
 import { handleReportsRequest } from './src/server/reports'
+import { inject } from './src/server/seo'
+import { buildSitemap } from './src/server/sitemap'
 import { handleStatusRequest } from './src/server/status'
 import { routeWisp } from './src/server/wisp'
 
@@ -41,6 +43,38 @@ export default defineConfig({
       configureServer(server) {
         server.middlewares.use('/api/status', handleStatusRequest)
         server.middlewares.use('/api/reports', handleReportsRequest)
+      }
+    },
+    {
+      // Express writes the head of each page in production. In development
+      // vite serves index.html itself, so the same head is written here,
+      // otherwise every page in development says what the home page says and
+      // there is no way to look at what a crawler would be handed.
+      name: 'Page Heads',
+      apply: 'serve',
+      transformIndexHtml: {
+        order: 'pre',
+        handler(html, ctx) {
+          return inject(html, (ctx.originalUrl ?? '/').split('?')[0])
+        }
+      }
+    },
+    {
+      // Built from the route table rather than checked in, and served in
+      // development too so the address in robots.txt answers in both.
+      name: 'Sitemap',
+      configureServer(server) {
+        server.middlewares.use('/sitemap.xml', (_req, res) => {
+          res.setHeader('content-type', 'application/xml')
+          res.end(buildSitemap())
+        })
+      },
+      generateBundle() {
+        this.emitFile({
+          type: 'asset',
+          fileName: 'sitemap.xml',
+          source: buildSitemap()
+        })
       }
     },
     {

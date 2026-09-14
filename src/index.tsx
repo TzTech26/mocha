@@ -8,8 +8,10 @@ import Layout from './layout'
 import About from './routes/about'
 import Bookmarks from './routes/bookmarks'
 import FAQ from './routes/faq'
+import GamePage from './routes/game'
 import Games from './routes/games'
 import Home from './routes/home'
+import NotFound from './routes/notfound'
 import Privacy from './routes/privacy'
 import Reports from './routes/reports'
 import ProxyViewer from './routes/route'
@@ -104,6 +106,7 @@ render(
       <Route path="/" component={Home} />
       <Route path="/route/:route" component={ProxyViewer} />
       <Route path="/games" component={Games} />
+      <Route path="/games/:id" component={GamePage} />
       <Route path="/shortcuts" component={Shortcuts} />
       <Route path="/bookmarks" component={Bookmarks} />
       <Route path="/faq" component={FAQ} />
@@ -113,6 +116,7 @@ render(
       <Route path="/settings" component={Settings} />
       <Route path="/status" component={Status} />
       <Route path="/reports" component={Reports} />
+      <Route path="*" component={NotFound} />
     </Router>
   ),
   root

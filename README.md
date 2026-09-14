@@ -18,6 +18,7 @@ The simplicity and power you expect from a web proxy.
 - [x] End-to-end encryption with Epoxy and Libcurl
 - [x] Site compatability alerts and suggestions
 - [x] Game reports, so a broken game is flagged before somebody clicks it
+- [x] A page per game, so a game can be linked, shared and found on a search engine
 - [ ] Script injections (Extensions)
 - [ ] Rammerhead
 
@@ -297,6 +298,62 @@ when the tab is returned to. Any key that still arrives at the page is copied
 into the frame and into the same-origin frames inside it, `keyCode` included,
 since the games this matters most for are old enough to read it. The copy only
 ever happens when the frame did not have focus, so nothing is delivered twice.
+
+## How a page gets found
+
+The app is one `index.html` for every address, which is the normal shape of a
+single page app and the worst possible shape for a search engine. Every page
+carried the same title, the same description and no canonical, so anything that
+did not run JavaScript - which is most crawlers, and Google itself until a
+second pass it makes no promises about - saw one page called "Mocha" three
+hundred times over.
+
+So the head is written per address, in three places that all read the same
+table in `src/lib/seo.ts`:
+
+- **The server**, in `src/server/seo.ts`, swaps the block between the
+  `<!--seo-->` markers in `index.html` for this address's title, description,
+  canonical, Open Graph and Twitter tags, and its structured data, before
+  sending the file. Nothing outside the markers is touched, and `express.static`
+  is mounted with `index: false` so that `/` goes through here too rather than
+  being answered with the file as it sits on disk.
+- **The app**, in `src/lib/head.ts`, does the same to the live document on every
+  navigation, since nothing reloads inside a single page app and the head would
+  otherwise still describe wherever somebody started. Everything either of them
+  owns is marked `data-seo`, which is what makes replacing the lot safe. Tab
+  cloaking still wins over the title, because hiding what a tab is beats saying
+  what page it is on.
+- **The sitemap**, in `src/server/sitemap.ts`, is generated at build time from
+  the same table plus `games.json`, so a page that is added, renamed or marked
+  `indexable: false` cannot be left behind in a hand written list. It is emitted
+  into `dist/` and served in development too, at the address `robots.txt` points
+  at.
+
+An address that is neither one of the app's own pages nor a game that exists is
+answered with a 404 rather than a 200 with an empty screen, which is how a site
+ends up with thousands of indexed pages that are all the same nothing.
+
+Three kinds of page are deliberately kept out of all of it, marked `noindex` and
+absent from the sitemap: the viewer and what it frames, which is somebody else's
+content served under this domain; `/bookmarks` and `/settings`, which are empty
+for anybody but the person whose browser stored them; and `/status`, which is
+reached from a dot at the bottom of the settings page rather than from a link,
+which is the point of it. The artwork under `/cdn` is the one exception carved
+out of the `Disallow` in `robots.txt`, because every game page names its own
+picture in its structured data and a games result without one is worth much
+less.
+
+## A page per game
+
+`/games/<id>` is a page about one game: its artwork, what it is, whether anybody
+has reported it broken, a Play button that opens the same viewer the grid always
+did, and a row of neighbouring games so every game has a way in from some other
+game. The name on each card in the grid links to it.
+
+The point is that a game opened in the viewer lives at a base64 address nobody
+can link to and `robots.txt` refuses, so three hundred games were worth nothing
+to anybody searching for one by name. These pages are what answers that search,
+and they are the bulk of the sitemap.
 
 ## Support us
 If you like Mocha and would like to support the development, you can donate to me [here](https://buymeacoffee.com/proudparrot2). It helps with server costs, domains, and otherwise financially supports me.
