@@ -1,7 +1,8 @@
-import { useNavigate } from '@solidjs/router'
+import { A, useNavigate } from '@solidjs/router'
 import { Show } from 'solid-js'
 import { gameImage, playGame } from '../lib/games'
 import { verdicts } from '../lib/reports'
+import { gamePath } from '../lib/seo'
 import type { GameData, GameReport } from '../lib/types'
 
 // The badge is handed in as a function rather than a value so a card is not
@@ -24,10 +25,18 @@ export default function Game(props: { game: GameData; report?: () => GameReport 
   return (
     <div class="card image-full aspect-video w-80 bg-base-100 shadow-xl">
       <figure>
-        <img src={gameImage(props.game)} alt={props.game.name} class="object-full h-full w-full" />
+        <img src={gameImage(props.game)} alt={`${props.game.name} unblocked`} class="object-full h-full w-full" loading="lazy" />
       </figure>
       <div class="card-body">
-        <h2 class="card-title text-3xl font-bold text-base-content">{props.game.name}</h2>
+        {/* The name is a link to the game's own page rather than plain text.
+            Play still plays, so nothing is a click further away than it was;
+            this is the path a crawler can follow, and what somebody who wants
+            to send a friend a game has to copy. */}
+        <h2 class="card-title text-3xl font-bold text-base-content">
+          <A href={gamePath(props.game.id)} class="link-hover">
+            {props.game.name}
+          </A>
+        </h2>
         <Show when={flag()}>{(verdict) => <div class={`badge ${verdict().badge} absolute right-4 top-4 gap-1`}>{verdict().label}</div>}</Show>
         <div class="card-actions absolute bottom-4 right-4 justify-end">
           <button class="btn btn-primary px-8" type="button" onClick={() => playGame(props.game, navigate)}>

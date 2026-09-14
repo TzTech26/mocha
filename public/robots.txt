@@ -9,4 +9,15 @@ Disallow: /~/
 Disallow: /route/
 Disallow: /cdn
 
+# Artwork is the exception. Every game page carries the game's own picture and
+# names it in its structured data, and a games result is worth a great deal
+# less without one, so the images under /cdn are let through while the pages
+# and the code beside them stay refused.
+Allow: /cdn/*.png$
+Allow: /cdn/*.jpg$
+Allow: /cdn/*.jpeg$
+Allow: /cdn/*.gif$
+Allow: /cdn/*.webp$
+Allow: /cdn/*.svg$
+
 Sitemap: https://desginmyvan.com/sitemap.xml

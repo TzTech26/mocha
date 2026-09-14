@@ -7,6 +7,7 @@ import store from 'store2'
 import { handleAboutBlank } from './lib/aboutblank'
 import { setBookmarks } from './lib/bookmarks'
 import { handleTabCloak } from './lib/cloak'
+import { applyHeadFor } from './lib/head'
 import { handlePanicKey } from './lib/panic'
 import { setupProxy } from './lib/proxy'
 import { loadSiteWideAds } from './lib/sitewide'
@@ -33,6 +34,16 @@ export default function Layout(props: ParentProps) {
     // A gate on the home page would otherwise decide the question once, on the
     // page somebody happened to land on, and never look again.
     loadSiteWideAds(location.pathname)
+
+    // The title, the description and the rest of what a crawler or a link
+    // preview reads. The server already wrote this address's head into the
+    // document, so this is about every navigation after the first one, where
+    // nothing reloads and the head would otherwise still describe the page
+    // somebody started on. A game page fills in its own once it knows which
+    // game it is - see routes/game.tsx.
+    if (!location.pathname.startsWith('/games/')) {
+      applyHeadFor(location.pathname)
+    }
   })
 
   onMount(async () => {
