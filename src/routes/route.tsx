@@ -7,6 +7,7 @@ import store from 'store2'
 import Ad, { adRailInset } from '../components/ad'
 import { openAbWindow } from '../lib/aboutblank'
 import { bookmarks, handleBookmark } from '../lib/bookmarks'
+import { directUrl } from '../lib/direct'
 import { gameIdFromTarget } from '../lib/games'
 import { focusFrame, watchKeyboard } from '../lib/keyboard'
 import { handlePanicKey } from '../lib/panic'
@@ -26,6 +27,10 @@ export default function Route() {
   const [bookmarked, setBookmarked] = createSignal(false)
   const [report, setReport] = createSignal<GameReport | null>(null)
   const [note, setNote] = createSignal('')
+  // Whether the frame holds one of the sites in lib/direct.ts, loaded as itself
+  // rather than through the proxy. That page is on another origin, so the
+  // controls that reach into the frame cannot, and use the address instead.
+  const [direct, setDirect] = createSignal(false)
 
   const params = useParams()
   const [searchParams] = useSearchParams()
@@ -88,6 +93,21 @@ export default function Route() {
     }
   }
 
+  // Points the frame at an address: through the proxy, or as itself for the
+  // sites in lib/direct.ts.
+  function show(target: string) {
+    const address = directUrl(target)
+
+    setDirect(Boolean(address))
+
+    if (address) {
+      setUrl(address)
+      ref.src = address
+    } else {
+      ref.src = `/~/${encodeXor(target)}`
+    }
+  }
+
   createEffect(() => {
     // Read what this depends on before the guard. An effect that returns
     // without reading anything has nothing to re-run on, so an iframe that was
@@ -97,13 +117,45 @@ export default function Route() {
     const ready = proxyReady()
     const query = atob(params.route)
 
-    if (!ready || !ref || !ref.contentWindow) return
+    if (!ref || !ref.contentWindow) return
 
-    ref.src = `/~/${encodeXor(formatSearch(query))}`
+    const target = formatSearch(query)
+    const address = directUrl(target)
+
+    // A direct site has no proxy to wait for. This still runs again when the
+    // proxy comes up, and leaves the frame alone then rather than restarting
+    // whatever somebody is already playing.
+    if (address ? ref.src === address : !ready) return
+
+    show(target)
   })
+
+  // A direct site is on another origin, so its own history and reload are out
+  // of reach. Loading the address again is the reload that is left.
+  function reload() {
+    if (!ref || !ref.contentWindow) return
+
+    if (direct()) {
+      ref.contentWindow.location.replace(ref.src)
+      return
+    }
+
+    ref.contentWindow.location.reload()
+  }
 
   function handleLoad() {
     if (!ref || !ref.contentWindow) return
+
+    // Everything below reads the page inside the frame, which the browser does
+    // not allow for a site on another origin. The address bar already says
+    // where it is.
+    if (direct()) {
+      setBookmarked(bookmarks().some((val) => val.url === url()))
+      focusFrame(ref)
+
+      return
+    }
+
     const contentWindow = ref.contentWindow as ContentWindow
 
     if (!('__uv$location' in contentWindow)) return
@@ -219,6 +271,7 @@ export default function Route() {
           <button
             class="btn btn-square join-item bg-base-200"
             type="button"
+            disabled={direct()}
             onClick={() => {
               if (!ref || !ref.contentWindow) return
               const contentWindow = ref.contentWindow as ContentWindow
@@ -230,15 +283,7 @@ export default function Route() {
         </div>
 
         <div class="tooltip" data-tip="Reload">
-          <button
-            class="btn btn-square join-item bg-base-200"
-            type="button"
-            onClick={() => {
-              if (!ref || !ref.contentWindow) return
-              const contentWindow = ref.contentWindow as ContentWindow
-              contentWindow.location.reload()
-            }}
-          >
+          <button class="btn btn-square join-item bg-base-200" type="button" onClick={reload}>
             <RotateCw class="h-5 w-5" />
           </button>
         </div>
@@ -246,6 +291,7 @@ export default function Route() {
           <button
             class="btn btn-square join-item bg-base-200"
             type="button"
+            disabled={direct()}
             onClick={() => {
               if (!ref || !ref.contentWindow) return
               const contentWindow = ref.contentWindow as ContentWindow
@@ -265,7 +311,7 @@ export default function Route() {
             if (e.key !== 'Enter') return
             if (!ref || !ref.contentWindow) return
 
-            ref.src = `/~/${encodeXor(formatSearch(e.currentTarget.value))}`
+            show(formatSearch(e.currentTarget.value))
             e.currentTarget.blur()
           }}
         />
@@ -285,7 +331,9 @@ export default function Route() {
           </div>
         </Show>
 
-        {(store('devtools') as DevtoolsData).enabled ? (
+        {/* Devtools are put into the page inside the frame, which a direct
+            site on another origin does not let anybody do. */}
+        {(store('devtools') as DevtoolsData).enabled && !direct() ? (
           <div class="tooltip" data-tip="Toggle devtools">
             <button
               class="btn btn-square join-item bg-base-200"
@@ -319,6 +367,20 @@ export default function Route() {
             type="button"
             onClick={async () => {
               if (!ref || !ref.contentWindow) return
+
+              // The page's own title and icon are out of reach on another
+              // origin, so a direct site is saved under its host.
+              if (direct()) {
+                const { status } = handleBookmark({
+                  title: new URL(url()).hostname,
+                  url: url(),
+                  image: '/globe.svg'
+                })
+
+                setBookmarked(status === 'added')
+                return
+              }
+
               const contentWindow = ref.contentWindow as ContentWindow
               if (!('__uv$location' in contentWindow)) return
 
@@ -342,7 +404,9 @@ export default function Route() {
               if (!ref || !ref.contentWindow) return
               const contentWindow = ref.contentWindow as ContentWindow
 
-              openAbWindow(contentWindow.location.href, false)
+              // Which page a direct site is on is not readable from here, so it
+              // pops out at the address it was opened at.
+              openAbWindow(direct() ? url() : contentWindow.location.href, false)
             }}
           >
             <SquareArrowOutUpRight class="h-5 w-5" />

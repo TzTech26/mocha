@@ -145,6 +145,13 @@ export function gamePath(id: string) {
   return `/games/${id}`
 }
 
+// Where a game's artwork is. Most of it sits beside the game on the CDN; a game
+// that is not on the CDN keeps its own in public/, written as a path from the
+// root.
+export function gameImage(game: Pick<GameData, 'id' | 'image'>) {
+  return game.image.startsWith('/') ? game.image : `/cdn/${game.id}/${game.image}`
+}
+
 // A game's id is in the URL, so keep it to what can appear in one. The CDN path
 // is built from the same value, and the one in lib/games.ts matches this.
 export function isGameId(id: string) {
@@ -179,7 +186,7 @@ export function seoForPath(pathname: string, options: { game?: GameData; origin?
     // max-image-preview lets the artwork through on a games result, which is
     // most of what makes one worth clicking.
     robots: indexable ? 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1' : 'noindex, nofollow',
-    image: options.game ? `${origin}/cdn/${options.game.id}/${options.game.image}` : `${origin}${socialImage}`,
+    image: options.game ? `${origin}${gameImage(options.game)}` : `${origin}${socialImage}`,
     indexable,
     jsonLd: indexable ? jsonLdFor(path, origin, options.game) : []
   }
@@ -310,7 +317,7 @@ function jsonLdFor(path: string, origin: string, game?: GameData): object[] {
         '@type': 'VideoGame',
         name: game.name,
         url: `${origin}${gamePath(game.id)}`,
-        image: `${origin}/cdn/${game.id}/${game.image}`,
+        image: `${origin}${gameImage(game)}`,
         description: gameSeo(game).description,
         applicationCategory: 'GameApplication',
         gamePlatform: 'Web browser',

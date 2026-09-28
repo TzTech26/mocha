@@ -780,6 +780,12 @@
     "image": "images/hextris-logo.png"
   },
   {
+    "name": "Hot Lap",
+    "id": "hot-lap",
+    "url": "https://hotlap.online/",
+    "image": "/art/hot-lap.png"
+  },
+  {
     "name": "Hover Bot Arena",
     "id": "hba",
     "file": "index.html",

@@ -29,7 +29,14 @@ export interface SearchEngineData {
 export interface GameData {
   name: string
   id: string
-  file: string
+  // The page to open, under the game's folder on the CDN.
+  file?: string
+  // A game on a site of its own instead, opened there. Only a site listed in
+  // lib/direct.ts skips the proxy; any other address is proxied like anything
+  // else.
+  url?: string
+  // Under the game's folder on the CDN, or a path from the root for artwork
+  // kept in public/.
   image: string
 }
 
