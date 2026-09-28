@@ -1,4 +1,5 @@
 import store from 'store2'
+import { directGame } from './direct'
 import type { StatusData, TopGame } from './types'
 
 // The server counts people, not tabs, so it needs something that tells two
@@ -42,17 +43,18 @@ type PageKind = 'site' | 'proxy' | 'game' | 'status'
 let currentPath = window.location.pathname
 
 // The proxy viewer's route is the base64 of what it is showing, and a game is
-// something under /cdn, so the page can tell the server what it is doing
-// without anything having to be plumbed through to here.
+// something under /cdn or one of the sites in lib/direct.ts, so the page can
+// tell the server what it is doing without anything having to be plumbed
+// through to here.
 function pageContext(pathname: string): { kind: PageKind; game?: string } {
   if (pathname === '/status') return { kind: 'status' }
 
   if (pathname.startsWith('/route/')) {
     try {
       const target = atob(decodeURIComponent(pathname.slice('/route/'.length)))
-      const game = /^\/cdn\/([a-zA-Z0-9._-]+)\//.exec(target)
+      const game = /^\/cdn\/([a-zA-Z0-9._-]+)\//.exec(target)?.[1] ?? directGame(target)
 
-      if (game) return { kind: 'game', game: game[1] }
+      if (game) return { kind: 'game', game }
     } catch {
       // A route that is not valid base64 is not a game either.
     }

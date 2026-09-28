@@ -132,13 +132,17 @@ function copy(event: KeyboardEvent, win: Window) {
 export function focusFrame(frame?: HTMLIFrameElement) {
   if (!frame || typing(document.activeElement)) return
 
+  // The element first and its window second. The other way round works for a
+  // frame on this origin, but for one on another origin - a site in
+  // lib/direct.ts - focusing the element afterwards takes back what focusing
+  // the window gave, and keys go nowhere until somebody clicks.
+  frame.focus({ preventScroll: true })
+
   try {
     frame.contentWindow?.focus()
   } catch {
     // Focusing a frame that has not loaded anything yet.
   }
-
-  frame.focus({ preventScroll: true })
 }
 
 // Everything above, wired to the page. Returns the way to take it back off.

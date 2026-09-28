@@ -53,5 +53,10 @@
     "name": "neal.fun",
     "url": "https://neal.fun",
     "image": "https://i.ytimg.com/vi/HHeBwZCJqhM/maxresdefault.jpg"
+  },
+  {
+    "name": "Hot Lap",
+    "url": "https://hotlap.online/",
+    "image": "/art/hot-lap.png"
   }
 ]

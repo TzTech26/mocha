@@ -112,7 +112,15 @@ export default function Game() {
 
                 <Show when={flag()}>{(verdict) => <div class={`badge ${verdict().badge} gap-1`}>{verdict().label}</div>}</Show>
 
-                <p class="text-base-content/70">{current().name} runs in your browser through Mocha, so it works on a school or work network that blocks the game itself. Nothing to download, nothing to install and no account, on a laptop, a Chromebook or a phone.</p>
+                {/* A game on its own site opens from there rather than through
+                    the proxy, so it gets past nothing the network blocks. */}
+                <Show when={current().url} fallback={<p class="text-base-content/70">{current().name} runs in your browser through Mocha, so it works on a school or work network that blocks the game itself. Nothing to download, nothing to install and no account, on a laptop, a Chromebook or a phone.</p>}>
+                  {(address) => (
+                    <p class="text-base-content/70">
+                      {current().name} opens in Mocha straight from its own site, {new URL(address()).hostname}. Nothing to download, nothing to install and no account, on a laptop, a Chromebook or a phone.
+                    </p>
+                  )}
+                </Show>
 
                 <button class="btn btn-primary px-8" type="button" onClick={() => playGame(current(), navigate)}>
                   <Play class="h-5 w-5" /> Play {current().name}

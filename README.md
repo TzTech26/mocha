@@ -149,6 +149,12 @@ One thing this does not cover: `/cdn` fetches game assets directly, which
 exposes the server's IP to that one host, though not to anything a visitor
 chooses.
 
+Nor does it cover the sites in `src/lib/direct.ts` (currently `hotlap.online`),
+which skip the proxy altogether: the viewer loads them in its frame as they
+are, so the visitor's browser talks to them itself and they see the visitor's
+own IP. That list is only for sites run by whoever runs Mocha, and each one has
+to allow being framed by Mocha's address.
+
 ## What the pool is not spent on
 
 A metered pool is spent by whatever the page asks for, and a game page asks for
